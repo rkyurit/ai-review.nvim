@@ -3,6 +3,14 @@ if vim.g.loaded_ai_review then
 end
 vim.g.loaded_ai_review = true
 
+local highlight_group = vim.api.nvim_create_augroup("AIReviewHighlights", { clear = true })
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = highlight_group,
+  callback = function()
+    require("ai-review.highlights").setup()
+  end,
+})
+
 vim.api.nvim_create_user_command("AIReview", function(command)
   require("ai-review").open({ cwd = command.args ~= "" and command.args or nil })
 end, { nargs = "?", complete = "dir", desc = "Review local Git changes" })

@@ -5,7 +5,8 @@ local state = require("ai-review.state")
 local tree = require("ai-review.tree")
 
 local M = {}
-local ns = vim.api.nvim_create_namespace("ai-review")
+local ui_ns = vim.api.nvim_create_namespace("ai-review-ui")
+local comment_ns = vim.api.nvim_create_namespace("ai-review-comments")
 local active
 
 local function working_target()
@@ -85,7 +86,7 @@ local function comments_for_file(path)
 end
 
 local function render_comments()
-  vim.api.nvim_buf_clear_namespace(active.diff_buf, ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(active.diff_buf, comment_ns, 0, -1)
   local path = active.selected_path
   for _, comment in ipairs(comments_for_file(path)) do
     local target_row
@@ -100,9 +101,9 @@ local function render_comments()
       local virtual = {}
       for index, line in ipairs(vim.split(comment.body, "\n", { plain = true })) do
         local prefix = index == 1 and "  ● " or "    "
-        virtual[#virtual + 1] = { { prefix .. line, "DiagnosticInfo" } }
+        virtual[#virtual + 1] = { { prefix .. line, "AIReviewComment" } }
       end
-      vim.api.nvim_buf_set_extmark(active.diff_buf, ns, target_row - 1, 0, {
+      vim.api.nvim_buf_set_extmark(active.diff_buf, comment_ns, target_row - 1, 0, {
         virt_lines = virtual,
         virt_lines_above = false,
       })
@@ -112,6 +113,12 @@ end
 
 local function render_files()
   local lines = {}
+  if valid_window(active.file_win) then
+    vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s "):format(
+      active.target.label,
+      (active.changed_only and "Changed files" or "All files") .. " │ f:Files b:Commit ?:Help"
+    )
+  end
   active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
   if active.selected_path then
     for index, node in ipairs(active.visible_nodes) do
@@ -138,6 +145,26 @@ local function render_files()
     lines = { "  No changes" }
   end
   set_lines(active.file_buf, lines)
+  vim.api.nvim_buf_clear_namespace(active.file_buf, ui_ns, 0, -1)
+  for index, node in ipairs(active.visible_nodes) do
+    local group
+    if index == active.file_index then
+      group = "AIReviewSelection"
+    elseif node.type == "directory" then
+      group = "AIReviewDirectory"
+    elseif node.status == "M" then
+      group = "AIReviewModified"
+    elseif node.status == "A" then
+      group = "AIReviewAdded"
+    elseif node.status == "D" then
+      group = "AIReviewDeleted"
+    elseif node.status == "?" then
+      group = "AIReviewUntracked"
+    else
+      group = "AIReviewMuted"
+    end
+    vim.api.nvim_buf_set_extmark(active.file_buf, ui_ns, index - 1, 0, { line_hl_group = group })
+  end
 end
 
 local function source_entries(contents)
@@ -184,6 +211,24 @@ local function render_diff(keep_cursor)
     lines[#lines + 1] = entry.text
   end
   set_lines(active.diff_buf, #lines > 0 and lines or { "No diff for " .. path })
+  vim.api.nvim_buf_clear_namespace(active.diff_buf, ui_ns, 0, -1)
+  for row, entry in ipairs(parsed.lines) do
+    local group
+    if entry.kind == "add" then
+      group = "AIReviewDiffAdd"
+    elseif entry.kind == "delete" then
+      group = "AIReviewDiffDelete"
+    elseif entry.kind == "hunk" then
+      group = "AIReviewHunk"
+    elseif entry.kind == "meta" then
+      group = "AIReviewMuted"
+    elseif entry.kind == "context" then
+      group = "AIReviewDiffContext"
+    end
+    if group then
+      vim.api.nvim_buf_set_extmark(active.diff_buf, ui_ns, row - 1, 0, { line_hl_group = group })
+    end
+  end
   if view_mode == "source" then
     vim.bo[active.diff_buf].filetype = vim.filetype.match({ filename = path }) or ""
   else
@@ -191,7 +236,11 @@ local function render_diff(keep_cursor)
   end
   vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
   active.rendered_mode = view_mode
-  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s "):format(active.target.label, view_mode, path)
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy ?:Help "):format(
+    active.target.label,
+    view_mode,
+    path
+  )
   render_comments()
   if keep_cursor and valid_window(active.diff_win) then
     old_cursor[1] = math.min(old_cursor[1], math.max(1, #lines))
@@ -451,10 +500,31 @@ end
 local function export_comments()
   local markdown = export.markdown(active.session, active.target)
   vim.fn.setreg('"', markdown)
-  if config.options.export_to_clipboard and vim.fn.has("clipboard") == 1 then
-    vim.fn.setreg("+", markdown)
+  local copied = false
+  if config.options.export_to_clipboard then
+    if vim.fn.has("clipboard") == 1 then
+      copied = pcall(vim.fn.setreg, "+", markdown)
+    end
+    if not copied then
+      local providers = {
+        { executable = "win32yank.exe", command = { "win32yank.exe", "-i", "--crlf" } },
+        { executable = "clip.exe", command = { "clip.exe" } },
+        { executable = "wl-copy", command = { "wl-copy" } },
+        { executable = "xclip", command = { "xclip", "-selection", "clipboard" } },
+        { executable = "pbcopy", command = { "pbcopy" } },
+      }
+      for _, provider in ipairs(providers) do
+        if vim.fn.executable(provider.executable) == 1 then
+          local result = vim.system(provider.command, { stdin = markdown }):wait()
+          copied = result.code == 0
+          if copied then
+            break
+          end
+        end
+      end
+    end
   end
-  notify("Review copied to clipboard")
+  notify(copied and "Review copied to system clipboard" or "Review copied to unnamed register")
 end
 
 local function refresh()
@@ -597,6 +667,61 @@ local function expand_node()
   end
 end
 
+local function show_help()
+  local lines = {
+    " AI Review — keyboard guide",
+    "",
+    " Navigation",
+    "   Ctrl-h / Ctrl-l   Move between tree and review",
+    "   j / k             Move cursor",
+    "   Enter or l        Open file / expand directory",
+    "   h                 Collapse directory",
+    "   ]h / [h           Next / previous diff hunk",
+    "",
+    " Review targets and files",
+    "   f                 Changed files / all files",
+    "   b                 Working tree / single commit",
+    "   B                 Select a commit range",
+    "   v                 Diff / regular source view",
+    "   r                 Refresh",
+    "",
+    " Comments",
+    "   c                 Comment on current line",
+    "   V, j/k, c         Comment on selected lines",
+    "   e / d             Edit / delete comment",
+    "   ]c / [c           Next / previous comment",
+    "   C                 List all comments",
+    "   y                 Copy AI-ready review",
+    "",
+    "   q                 Close review or this help",
+  }
+  local width = math.min(70, vim.o.columns - 4)
+  local height = math.min(#lines, vim.o.lines - 4)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = " AI Review Help ",
+    title_pos = "center",
+  })
+  vim.wo[win].winhighlight = "Normal:NormalFloat,FloatBorder:AIReviewTitle,FloatTitle:AIReviewTitle"
+  local function close_help()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.keymap.set("n", "q", close_help, { buffer = buf, silent = true })
+  vim.keymap.set("n", "<Esc>", close_help, { buffer = buf, silent = true })
+  vim.keymap.set("n", "?", close_help, { buffer = buf, silent = true })
+end
+
 local function close()
   if not active then
     return
@@ -624,6 +749,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
+  map(active.file_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.file_buf, "n", keys.refresh, refresh, "Refresh review")
   map(active.file_buf, "n", keys.close, close, "Close review")
 
@@ -636,6 +762,7 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.diff_buf, "n", keys.select_range, select_range, "Select commit range")
+  map(active.diff_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.diff_buf, "n", keys.next_hunk, function()
     jump_hunk(1)
   end, "Next hunk")
@@ -655,6 +782,7 @@ end
 
 function M.open(opts)
   opts = opts or {}
+  require("ai-review.highlights").setup()
   if active then
     notify("A review is already open", vim.log.levels.WARN)
     return
@@ -696,7 +824,7 @@ function M.open(opts)
     all_files = all_files,
     changed_by_path = changed_by_path,
     expanded = {},
-    changed_only = false,
+    changed_only = config.options.changed_only,
     visible_nodes = {},
     file_index = 1,
     selected_path = files[1] and files[1].path or all_files[1],
@@ -720,7 +848,12 @@ function M.open(opts)
   vim.wo[file_win].number = false
   vim.wo[file_win].relativenumber = false
   vim.wo[file_win].signcolumn = "no"
+  vim.wo[file_win].cursorline = true
+  vim.wo[file_win].winbar = " AI Review │ Changed files "
+  vim.wo[file_win].statusline = " ? Help   f All files   b Commit   B Range   Enter Open "
   vim.wo[diff_win].wrap = false
+  vim.wo[diff_win].cursorline = true
+  vim.wo[diff_win].statusline = " ? Help   c Comment   V…c Range   v Diff/Source   y Copy   q Close "
 
   install_keymaps()
   render_files()

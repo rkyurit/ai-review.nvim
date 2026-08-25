@@ -127,6 +127,12 @@ for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 end
 
 local diff_buf = vim.api.nvim_get_current_buf()
+local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
+assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
+local selection_hl = vim.api.nvim_get_hl(0, { name = "AIReviewSelection" })
+assert(selection_hl.bg, "review highlight was not configured")
+assert(vim.wo[file_win].winbar:find("?:Help", 1, true), "file tree is missing persistent help hint")
+assert(vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("c:Comment", 1, true), "diff view is missing persistent key hints")
 local diff_lines = vim.api.nvim_buf_get_lines(diff_buf, 0, -1, false)
 local added_row
 local deleted_row
@@ -156,6 +162,15 @@ local exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Visual range comment", 1, true), "visual comment was not exported")
 assert(exported:find("-before", 1, true), "visual comment context is missing deleted line")
 assert(exported:find("+after", 1, true), "visual comment context is missing added line")
+
+local windows_before_help = #vim.api.nvim_tabpage_list_wins(0)
+vim.api.nvim_feedkeys("?", "x", false)
+equal(windows_before_help + 1, #vim.api.nvim_tabpage_list_wins(0), "help window did not open")
+vim.api.nvim_feedkeys("q", "x", false)
+equal(windows_before_help, #vim.api.nvim_tabpage_list_wins(0), "help window did not close")
+
+vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
+vim.api.nvim_feedkeys("f", "x", false)
 
 local file_lines = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 local source_row

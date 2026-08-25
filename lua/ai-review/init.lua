@@ -2,6 +2,7 @@ local M = {}
 
 function M.setup(opts)
   require("ai-review.config").setup(opts)
+  require("ai-review.highlights").setup()
 end
 
 function M.open(opts)
