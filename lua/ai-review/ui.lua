@@ -146,17 +146,49 @@ local function add_comment(start_row, end_row)
   if not active.parsed then
     return
   end
-  local first = active.parsed.lines[start_row]
-  local last = active.parsed.lines[end_row]
-  local side, start_line = comment_line(first)
-  local last_side, end_line = comment_line(last)
-  if not side or not start_line then
+  local new_lines = {}
+  local old_lines = {}
+  local has_addition = false
+  local has_deletion = false
+  for row = start_row, end_row do
+    local entry = active.parsed.lines[row]
+    if entry then
+      if entry.new_line then
+        new_lines[#new_lines + 1] = entry.new_line
+      end
+      if entry.old_line then
+        old_lines[#old_lines + 1] = entry.old_line
+      end
+      has_addition = has_addition or entry.kind == "add"
+      has_deletion = has_deletion or entry.kind == "delete"
+    end
+  end
+
+  local side
+  local selected_lines
+  if has_addition and #new_lines > 0 then
+    side = "new"
+    selected_lines = new_lines
+  elseif has_deletion and #old_lines > 0 then
+    side = "old"
+    selected_lines = old_lines
+  elseif #new_lines > 0 then
+    side = "new"
+    selected_lines = new_lines
+  else
+    side = "old"
+    selected_lines = old_lines
+  end
+
+  if not selected_lines or #selected_lines == 0 then
     notify("Place the cursor on a changed or context line", vim.log.levels.WARN)
     return
   end
-  if last_side ~= side or not end_line then
-    end_line = start_line
-    end_row = start_row
+  local start_line = selected_lines[1]
+  local end_line = selected_lines[1]
+  for _, line in ipairs(selected_lines) do
+    start_line = math.min(start_line, line)
+    end_line = math.max(end_line, line)
   end
   vim.ui.input(
     { prompt = ("Comment on %s:%d: "):format(active.files[active.file_index].path, start_line) },

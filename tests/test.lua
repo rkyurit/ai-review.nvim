@@ -67,21 +67,37 @@ assert(markdown:find("Keep the original wording.", 1, true), "export is missing 
 require("ai-review").open({ cwd = root })
 assert(#vim.api.nvim_list_tabpages() == 2, "review tab was not created")
 
-local diff_buf = vim.api.nvim_get_current_buf()
-local diff_lines = vim.api.nvim_buf_get_lines(diff_buf, 0, -1, false)
-local added_row
-for row, line in ipairs(diff_lines) do
-  if line:sub(1, 1) == "+" and line:sub(1, 3) ~= "+++" then
-    added_row = row
+for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+  local buf = vim.api.nvim_win_get_buf(win)
+  if vim.bo[buf].filetype == "ai-review-files" then
+    vim.api.nvim_set_current_win(win)
+    vim.api.nvim_win_set_cursor(win, { 3, 0 })
+    vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
     break
   end
 end
+
+local diff_buf = vim.api.nvim_get_current_buf()
+local diff_lines = vim.api.nvim_buf_get_lines(diff_buf, 0, -1, false)
+local added_row
+local deleted_row
+for row, line in ipairs(diff_lines) do
+  if line:sub(1, 1) == "+" and line:sub(1, 3) ~= "+++" then
+    added_row = row
+  elseif line:sub(1, 1) == "-" and line:sub(1, 3) ~= "---" then
+    deleted_row = row
+  end
+end
 assert(added_row, "no added line in review buffer")
-vim.api.nvim_win_set_cursor(0, { added_row, 0 })
+assert(deleted_row, "no deleted line in review buffer")
+local selection_start = math.min(added_row, deleted_row)
+local selection_end = math.max(added_row, deleted_row)
+vim.api.nvim_win_set_cursor(0, { selection_start, 0 })
 vim.ui.input = function(_, callback)
   callback("Visual range comment")
 end
 vim.cmd("normal! V")
+vim.api.nvim_win_set_cursor(0, { selection_end, 0 })
 vim.api.nvim_feedkeys("c", "x", false)
 vim.wait(50)
 
@@ -89,6 +105,8 @@ local visual_export = vim.fs.joinpath(vim.env.AI_REVIEW_TEST_STATE, "visual-revi
 vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
 local exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Visual range comment", 1, true), "visual comment was not exported")
+assert(exported:find("-before", 1, true), "visual comment context is missing deleted line")
+assert(exported:find("+after", 1, true), "visual comment context is missing added line")
 
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")
