@@ -1,6 +1,7 @@
 local git = require("ai-review.git")
 local state = require("ai-review.state")
 local export = require("ai-review.export")
+local tree = require("ai-review.tree")
 
 local root = assert(vim.env.AI_REVIEW_TEST_REPO)
 
@@ -24,6 +25,41 @@ end
 assert(by_path["added.txt"], "untracked file missing")
 assert(by_path["deleted.txt"], "deleted file missing")
 assert(by_path["tracked.txt"], "modified file missing")
+
+local commits = git.commits(root, 10)
+equal(2, #commits, "commit count")
+local latest = { kind = "commit", commit = commits[1].hash }
+local base = { kind = "commit", commit = commits[2].hash }
+local commit_files = git.changed_files(root, latest)
+equal("history.txt", commit_files[1].path, "single commit changed path")
+local commit_diff = git.diff(root, commit_files[1], 3, latest)
+assert(
+  vim.iter(commit_diff.lines):any(function(line)
+    return line.text == "+two"
+  end),
+  "single commit diff is missing new content"
+)
+
+local range = { kind = "range", base = commits[2].hash, target = commits[1].hash }
+local range_files = git.changed_files(root, range)
+equal("history.txt", range_files[1].path, "range changed path")
+equal("one\n", git.read_file(root, "history.txt", base), "base source content")
+equal("two\n", git.read_file(root, "history.txt", latest), "commit source content")
+
+local repo_files = git.repo_files(root)
+local visible_tree = tree.build(repo_files, files, {}, false)
+assert(
+  vim.iter(visible_tree):any(function(node)
+    return node.type == "directory" and node.path == "src"
+  end),
+  "repository tree is missing directory"
+)
+assert(
+  vim.iter(visible_tree):any(function(node)
+    return node.type == "file" and node.path == "src/plain.lua"
+  end),
+  "repository tree is missing source file"
+)
 
 local modified = git.diff(root, by_path["tracked.txt"], 3)
 assert(#modified.hunks > 0, "modified file has no hunks")
@@ -67,11 +103,24 @@ assert(markdown:find("Keep the original wording.", 1, true), "export is missing 
 require("ai-review").open({ cwd = root })
 assert(#vim.api.nvim_list_tabpages() == 2, "review tab was not created")
 
+local file_win
+local file_buf
 for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
   local buf = vim.api.nvim_win_get_buf(win)
   if vim.bo[buf].filetype == "ai-review-files" then
+    file_win = win
+    file_buf = buf
     vim.api.nvim_set_current_win(win)
-    vim.api.nvim_win_set_cursor(win, { 3, 0 })
+    local rows = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local tracked_row
+    for row, line in ipairs(rows) do
+      if line:find("tracked.txt", 1, true) then
+        tracked_row = row
+        break
+      end
+    end
+    assert(tracked_row, "tracked file is missing from file tree")
+    vim.api.nvim_win_set_cursor(win, { tracked_row, 0 })
     vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
     break
   end
@@ -107,6 +156,31 @@ local exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Visual range comment", 1, true), "visual comment was not exported")
 assert(exported:find("-before", 1, true), "visual comment context is missing deleted line")
 assert(exported:find("+after", 1, true), "visual comment context is missing added line")
+
+local file_lines = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
+local source_row
+for row, line in ipairs(file_lines) do
+  if line:find("plain.lua", 1, true) then
+    source_row = row
+    break
+  end
+end
+assert(source_row, "source file is missing from file tree")
+vim.api.nvim_set_current_win(file_win)
+vim.api.nvim_win_set_cursor(file_win, { source_row, 0 })
+vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
+equal("lua", vim.bo[vim.api.nvim_get_current_buf()].filetype, "source filetype")
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+vim.ui.input = function(_, callback)
+  callback("Source file comment")
+end
+vim.cmd("normal! Vj")
+vim.api.nvim_feedkeys("c", "x", false)
+vim.wait(50)
+vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
+exported = table.concat(vim.fn.readfile(visual_export), "\n")
+assert(exported:find("Source file comment", 1, true), "source comment was not exported")
+assert(exported:find("View: source file", 1, true), "source comment type was not exported")
 
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")

@@ -31,8 +31,24 @@ local function split_nul(value)
   return items
 end
 
-function M.changed_files(root)
-  local out = run({ "git", "diff", "--name-status", "-z", "--find-renames", "HEAD" }, root)
+local function target_kind(target)
+  return target and target.kind or "working"
+end
+
+local function name_status(root, target)
+  if target_kind(target) == "commit" then
+    return run(
+      { "git", "diff-tree", "--root", "--no-commit-id", "-r", "--name-status", "-z", "--find-renames", target.commit },
+      root
+    )
+  elseif target_kind(target) == "range" then
+    return run({ "git", "diff", "--name-status", "-z", "--find-renames", target.base, target.target }, root)
+  end
+  return run({ "git", "diff", "--name-status", "-z", "--find-renames", "HEAD" }, root)
+end
+
+function M.changed_files(root, target)
+  local out = name_status(root, target)
   local tokens = split_nul(out)
   local files = {}
   local index = 1
@@ -54,9 +70,11 @@ function M.changed_files(root)
     end
   end
 
-  local untracked = split_nul(run({ "git", "ls-files", "--others", "--exclude-standard", "-z" }, root))
-  for _, path in ipairs(untracked) do
-    files[#files + 1] = { status = "?", path = path }
+  if target_kind(target) == "working" then
+    local untracked = split_nul(run({ "git", "ls-files", "--others", "--exclude-standard", "-z" }, root))
+    for _, path in ipairs(untracked) do
+      files[#files + 1] = { status = "?", path = path }
+    end
   end
   table.sort(files, function(a, b)
     return a.path < b.path
@@ -113,10 +131,36 @@ function M.parse_diff(text, file)
   return parsed
 end
 
-function M.diff(root, file, context_lines)
+function M.diff(root, file, context_lines, target)
   local args
   local allow_failure = false
-  if file.status == "?" then
+  if target_kind(target) == "commit" then
+    args = {
+      "git",
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--no-color",
+      "--find-renames",
+      "--unified=" .. context_lines,
+      target.commit,
+      "--",
+      file.path,
+    }
+  elseif target_kind(target) == "range" then
+    args = {
+      "git",
+      "diff",
+      "--no-ext-diff",
+      "--no-color",
+      "--find-renames",
+      "--unified=" .. context_lines,
+      target.base,
+      target.target,
+      "--",
+      file.path,
+    }
+  elseif file.status == "?" then
     args = {
       "git",
       "diff",
@@ -137,6 +181,52 @@ function M.diff(root, file, context_lines)
     error(vim.trim(err))
   end
   return M.parse_diff(out, file)
+end
+
+function M.commits(root, limit)
+  local format = "%H%x1f%h%x1f%s%x1f%an%x1f%ar%x1e"
+  local out = run({ "git", "log", "--all", "--date-order", "-n", tostring(limit or 100), "--format=" .. format }, root)
+  local commits = {}
+  for record in out:gmatch("([^\30]+)") do
+    local hash, short, subject, author, relative =
+      record:gsub("^%s+", ""):match("([^\31]*)\31([^\31]*)\31([^\31]*)\31([^\31]*)\31([^\31]*)")
+    if hash then
+      commits[#commits + 1] = {
+        hash = hash,
+        short = short,
+        subject = subject,
+        author = author,
+        relative = relative,
+      }
+    end
+  end
+  return commits
+end
+
+function M.repo_files(root, target)
+  local out
+  if target_kind(target) == "commit" then
+    out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.commit }, root)
+  elseif target_kind(target) == "range" then
+    out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.target }, root)
+  else
+    out = run({ "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, root)
+  end
+  local files = split_nul(out)
+  table.sort(files)
+  return files
+end
+
+function M.read_file(root, path, target)
+  if target_kind(target) == "commit" then
+    return run({ "git", "show", target.commit .. ":" .. path }, root)
+  elseif target_kind(target) == "range" then
+    return run({ "git", "show", target.target .. ":" .. path }, root)
+  end
+  local file = assert(io.open(vim.fs.joinpath(root, path), "rb"))
+  local contents = file:read("*a")
+  file:close()
+  return contents
 end
 
 return M

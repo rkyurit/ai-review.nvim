@@ -2,10 +2,28 @@ local config = require("ai-review.config")
 local export = require("ai-review.export")
 local git = require("ai-review.git")
 local state = require("ai-review.state")
+local tree = require("ai-review.tree")
 
 local M = {}
 local ns = vim.api.nvim_create_namespace("ai-review")
 local active
+
+local function working_target()
+  return { kind = "working", id = "working", label = "Working tree" }
+end
+
+local function current_node()
+  return active and active.visible_nodes and active.visible_nodes[active.file_index] or nil
+end
+
+local function current_path()
+  local node = current_node()
+  return node and node.type == "file" and node.path or active and active.selected_path or nil
+end
+
+local function comment_belongs(comment)
+  return comment.target_id == active.target.id or (not comment.target_id and active.target.id == "working")
+end
 
 local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = "AI Review" })
@@ -29,6 +47,9 @@ local function current_diff_entry()
 end
 
 local function comment_line(entry)
+  if entry and entry.kind == "source" then
+    return "source", entry.new_line
+  end
   if entry.new_line then
     return "new", entry.new_line
   end
@@ -56,7 +77,7 @@ end
 local function comments_for_file(path)
   local comments = {}
   for _, comment in ipairs(active.session.comments) do
-    if comment.path == path and not comment.resolved then
+    if comment.path == path and not comment.resolved and comment_belongs(comment) then
       comments[#comments + 1] = comment
     end
   end
@@ -65,7 +86,7 @@ end
 
 local function render_comments()
   vim.api.nvim_buf_clear_namespace(active.diff_buf, ns, 0, -1)
-  local path = active.files[active.file_index].path
+  local path = active.selected_path
   for _, comment in ipairs(comments_for_file(path)) do
     local target_row
     for row, entry in ipairs(active.parsed.lines) do
@@ -91,11 +112,27 @@ end
 
 local function render_files()
   local lines = {}
-  for index, file in ipairs(active.files) do
+  active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
+  if active.selected_path then
+    for index, node in ipairs(active.visible_nodes) do
+      if node.type == "file" and node.path == active.selected_path then
+        active.file_index = index
+        break
+      end
+    end
+  end
+  active.file_index = math.min(active.file_index, math.max(1, #active.visible_nodes))
+  for index, file in ipairs(active.visible_nodes) do
     local marker = index == active.file_index and "▸" or " "
-    local count = #comments_for_file(file.path)
+    local count = file.type == "file" and #comments_for_file(file.path) or 0
     local suffix = count > 0 and ("  [%d]"):format(count) or ""
-    lines[#lines + 1] = ("%s %s %s%s"):format(marker, file.status, file.path, suffix)
+    local indent = string.rep("  ", file.depth)
+    if file.type == "directory" then
+      local icon = active.expanded[file.path] == false and "▸" or "▾"
+      lines[#lines + 1] = ("%s %s%s %s/"):format(marker, indent, icon, file.name)
+    else
+      lines[#lines + 1] = ("%s %s%-1s %s%s"):format(marker, indent, file.status or " ", file.name, suffix)
+    end
   end
   if #lines == 0 then
     lines = { "  No changes" }
@@ -103,15 +140,39 @@ local function render_files()
   set_lines(active.file_buf, lines)
 end
 
+local function source_entries(contents)
+  local entries = {}
+  local lines = vim.split(contents, "\n", { plain = true })
+  if lines[#lines] == "" then
+    table.remove(lines)
+  end
+  for row, line in ipairs(lines) do
+    entries[#entries + 1] = { text = line, kind = "source", new_line = row }
+  end
+  return entries
+end
+
 local function render_diff(keep_cursor)
-  local file = active.files[active.file_index]
-  if not file then
+  local path = active.selected_path
+  if not path then
     set_lines(active.diff_buf, { "No changes to review." })
     active.parsed = nil
     return
   end
   local old_cursor = valid_window(active.diff_win) and vim.api.nvim_win_get_cursor(active.diff_win) or { 1, 0 }
-  local ok, parsed = pcall(git.diff, active.root, file, config.options.context_lines)
+  local changed = active.changed_by_path[path]
+  local view_mode = active.view_mode
+  if not changed then
+    view_mode = "source"
+  end
+  local ok, parsed
+  if view_mode == "source" then
+    local source_ok, contents = pcall(git.read_file, active.root, path, active.target)
+    ok = source_ok
+    parsed = source_ok and { file = { path = path }, lines = source_entries(contents), hunks = {} } or contents
+  else
+    ok, parsed = pcall(git.diff, active.root, changed, config.options.context_lines, active.target)
+  end
   if not ok then
     set_lines(active.diff_buf, { "Failed to load diff:", tostring(parsed) })
     active.parsed = nil
@@ -122,9 +183,15 @@ local function render_diff(keep_cursor)
   for _, entry in ipairs(parsed.lines) do
     lines[#lines + 1] = entry.text
   end
-  set_lines(active.diff_buf, #lines > 0 and lines or { "No diff for " .. file.path })
-  vim.bo[active.diff_buf].filetype = "diff"
-  vim.api.nvim_buf_set_name(active.diff_buf, "ai-review://" .. file.path)
+  set_lines(active.diff_buf, #lines > 0 and lines or { "No diff for " .. path })
+  if view_mode == "source" then
+    vim.bo[active.diff_buf].filetype = vim.filetype.match({ filename = path }) or ""
+  else
+    vim.bo[active.diff_buf].filetype = "diff"
+  end
+  vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
+  active.rendered_mode = view_mode
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s "):format(active.target.label, view_mode, path)
   render_comments()
   if keep_cursor and valid_window(active.diff_win) then
     old_cursor[1] = math.min(old_cursor[1], math.max(1, #lines))
@@ -133,10 +200,18 @@ local function render_diff(keep_cursor)
 end
 
 local function select_file(index)
-  if not active.files[index] then
+  local node = active.visible_nodes[index]
+  if not node then
+    return
+  end
+  if node.type == "directory" then
+    active.expanded[node.path] = active.expanded[node.path] == false
+    render_files()
     return
   end
   active.file_index = index
+  active.selected_path = node.path
+  active.view_mode = active.changed_by_path[node.path] and "diff" or "source"
   render_files()
   render_diff(false)
   vim.api.nvim_set_current_win(active.diff_win)
@@ -166,7 +241,10 @@ local function add_comment(start_row, end_row)
 
   local side
   local selected_lines
-  if has_addition and #new_lines > 0 then
+  if active.rendered_mode == "source" and #new_lines > 0 then
+    side = "source"
+    selected_lines = new_lines
+  elseif has_addition and #new_lines > 0 then
     side = "new"
     selected_lines = new_lines
   elseif has_deletion and #old_lines > 0 then
@@ -190,28 +268,27 @@ local function add_comment(start_row, end_row)
     start_line = math.min(start_line, line)
     end_line = math.max(end_line, line)
   end
-  vim.ui.input(
-    { prompt = ("Comment on %s:%d: "):format(active.files[active.file_index].path, start_line) },
-    function(body)
-      if not body or vim.trim(body) == "" or not active then
-        return
-      end
-      active.session.comments[#active.session.comments + 1] = {
-        id = tostring(vim.uv.hrtime()),
-        path = active.files[active.file_index].path,
-        side = side,
-        start_line = start_line,
-        end_line = end_line,
-        body = body,
-        context = context_for_range(start_row, end_row),
-        created_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-        resolved = false,
-      }
-      persist()
-      render_files()
-      render_comments()
+  vim.ui.input({ prompt = ("Comment on %s:%d: "):format(active.selected_path, start_line) }, function(body)
+    if not body or vim.trim(body) == "" or not active then
+      return
     end
-  )
+    active.session.comments[#active.session.comments + 1] = {
+      id = tostring(vim.uv.hrtime()),
+      path = active.selected_path,
+      target_id = active.target.id,
+      target_label = active.target.label,
+      side = side,
+      start_line = start_line,
+      end_line = end_line,
+      body = body,
+      context = context_for_range(start_row, end_row),
+      created_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+      resolved = false,
+    }
+    persist()
+    render_files()
+    render_comments()
+  end)
 end
 
 local function comment_at_cursor()
@@ -240,7 +317,8 @@ local function comment_at_cursor_position()
   end
   for _, comment in ipairs(active.session.comments) do
     if
-      comment.path == active.files[active.file_index].path
+      comment.path == active.selected_path
+      and comment_belongs(comment)
       and comment.side == side
       and line >= comment.start_line
       and line <= (comment.end_line or comment.start_line)
@@ -313,11 +391,17 @@ end
 
 local function comment_rows()
   local rows = {}
-  local path = active.files[active.file_index].path
+  local path = active.selected_path
   for row, entry in ipairs(active.parsed.lines) do
     local side, line = comment_line(entry)
     for _, comment in ipairs(active.session.comments) do
-      if comment.path == path and not comment.resolved and comment.side == side and comment.start_line == line then
+      if
+        comment.path == path
+        and not comment.resolved
+        and comment_belongs(comment)
+        and comment.side == side
+        and comment.start_line == line
+      then
         rows[#rows + 1] = row
         break
       end
@@ -329,7 +413,7 @@ end
 local function show_comments()
   local items = {}
   for _, comment in ipairs(active.session.comments) do
-    if not comment.resolved then
+    if not comment.resolved and comment_belongs(comment) then
       items[#items + 1] = comment
     end
   end
@@ -346,8 +430,10 @@ local function show_comments()
     if not choice or not active then
       return
     end
-    for index, file in ipairs(active.files) do
-      if file.path == choice.path then
+    active.changed_only = false
+    render_files()
+    for index, file in ipairs(active.visible_nodes) do
+      if file.type == "file" and file.path == choice.path then
         select_file(index)
         for row, entry in ipairs(active.parsed.lines) do
           local side, line = comment_line(entry)
@@ -363,7 +449,7 @@ local function show_comments()
 end
 
 local function export_comments()
-  local markdown = export.markdown(active.session)
+  local markdown = export.markdown(active.session, active.target)
   vim.fn.setreg('"', markdown)
   if config.options.export_to_clipboard and vim.fn.has("clipboard") == 1 then
     vim.fn.setreg("+", markdown)
@@ -372,17 +458,143 @@ local function export_comments()
 end
 
 local function refresh()
-  local selected_path = active.files[active.file_index] and active.files[active.file_index].path
-  active.files = git.changed_files(active.root)
+  local selected_path = active.selected_path
+  active.files = git.changed_files(active.root, active.target)
+  active.all_files = git.repo_files(active.root, active.target)
+  active.changed_by_path = {}
+  for _, file in ipairs(active.files) do
+    active.changed_by_path[file.path] = file
+  end
+  for _, file in ipairs(active.files) do
+    if not vim.tbl_contains(active.all_files, file.path) then
+      active.all_files[#active.all_files + 1] = file.path
+    end
+  end
+  table.sort(active.all_files)
   active.file_index = 1
-  for index, file in ipairs(active.files) do
-    if file.path == selected_path then
+  active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
+  for index, file in ipairs(active.visible_nodes) do
+    if file.type == "file" and file.path == selected_path then
       active.file_index = index
       break
     end
   end
+  local node = active.visible_nodes[active.file_index]
+  active.selected_path = node and node.type == "file" and node.path or nil
   render_files()
   render_diff(true)
+end
+
+local function apply_target(target)
+  active.target = target
+  active.selected_path = nil
+  active.file_index = 1
+  active.view_mode = "diff"
+  refresh()
+  for index, node in ipairs(active.visible_nodes) do
+    if node.type == "file" then
+      select_file(index)
+      return
+    end
+  end
+end
+
+local function commit_label(commit)
+  return ("%s  %s  (%s)"):format(commit.short, commit.subject, commit.relative)
+end
+
+local function select_target()
+  local items = { { kind = "working", id = "working", label = "Working tree" } }
+  for _, commit in ipairs(git.commits(active.root, 100)) do
+    items[#items + 1] = {
+      kind = "commit",
+      id = "commit:" .. commit.hash,
+      label = commit_label(commit),
+      commit = commit.hash,
+    }
+  end
+  vim.ui.select(items, {
+    prompt = "Review target",
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(choice)
+    if choice and active then
+      apply_target(choice)
+    end
+  end)
+end
+
+local function select_range()
+  local commits = git.commits(active.root, 100)
+  vim.ui.select(commits, {
+    prompt = "Range base (older commit)",
+    format_item = commit_label,
+  }, function(base)
+    if not base or not active then
+      return
+    end
+    vim.ui.select(commits, {
+      prompt = "Range target (newer commit)",
+      format_item = commit_label,
+    }, function(target)
+      if target and active then
+        apply_target({
+          kind = "range",
+          id = "range:" .. base.hash .. ".." .. target.hash,
+          label = base.short .. ".." .. target.short,
+          base = base.hash,
+          target = target.hash,
+        })
+      end
+    end)
+  end)
+end
+
+local function toggle_files()
+  active.changed_only = not active.changed_only
+  render_files()
+  local node = current_node()
+  if not node or node.type ~= "file" then
+    for index, candidate in ipairs(active.visible_nodes) do
+      if candidate.type == "file" then
+        select_file(index)
+        break
+      end
+    end
+  end
+  notify(active.changed_only and "Showing changed files" or "Showing all repository files")
+end
+
+local function toggle_view()
+  local path = active.selected_path
+  if not path then
+    return
+  end
+  if not active.changed_by_path[path] then
+    notify("This file has no diff in the selected target", vim.log.levels.WARN)
+    return
+  end
+  active.view_mode = active.rendered_mode == "diff" and "source" or "diff"
+  render_diff(true)
+end
+
+local function collapse_node()
+  local node = current_node()
+  if node and node.type == "directory" then
+    active.expanded[node.path] = false
+    render_files()
+  end
+end
+
+local function expand_node()
+  local node = current_node()
+  if node and node.type == "directory" then
+    active.expanded[node.path] = true
+    render_files()
+  elseif node and node.type == "file" then
+    select_file(active.file_index)
+  end
 end
 
 local function close()
@@ -407,6 +619,11 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.open_file, function()
     select_file(vim.api.nvim_win_get_cursor(active.file_win)[1])
   end, "Open file diff")
+  map(active.file_buf, "n", keys.collapse, collapse_node, "Collapse directory")
+  map(active.file_buf, "n", keys.expand, expand_node, "Expand directory or open file")
+  map(active.file_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
+  map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
+  map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.file_buf, "n", keys.refresh, refresh, "Refresh review")
   map(active.file_buf, "n", keys.close, close, "Close review")
 
@@ -415,6 +632,10 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.edit_comment, edit_comment, "Edit review comment")
   map(active.diff_buf, "n", keys.delete_comment, delete_comment, "Delete review comment")
   map(active.diff_buf, "n", keys.comments, show_comments, "List review comments")
+  map(active.diff_buf, "n", keys.toggle_view, toggle_view, "Toggle diff/source view")
+  map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
+  map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")
+  map(active.diff_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.diff_buf, "n", keys.next_hunk, function()
     jump_hunk(1)
   end, "Next hunk")
@@ -443,7 +664,17 @@ function M.open(opts)
     notify("Not inside a Git repository", vim.log.levels.ERROR)
     return
   end
-  local files = git.changed_files(root)
+  local target = working_target()
+  local files = git.changed_files(root, target)
+  local all_files = git.repo_files(root, target)
+  local changed_by_path = {}
+  for _, file in ipairs(files) do
+    changed_by_path[file.path] = file
+    if not vim.tbl_contains(all_files, file.path) then
+      all_files[#all_files + 1] = file.path
+    end
+  end
+  table.sort(all_files)
   local branch = git.branch(root)
   local session, session_path = state.load(root, branch)
 
@@ -460,8 +691,16 @@ function M.open(opts)
   active = {
     root = root,
     branch = branch,
+    target = target,
     files = files,
+    all_files = all_files,
+    changed_by_path = changed_by_path,
+    expanded = {},
+    changed_only = false,
+    visible_nodes = {},
     file_index = 1,
+    selected_path = files[1] and files[1].path or all_files[1],
+    view_mode = files[1] and "diff" or "source",
     session = session,
     session_path = session_path,
     tab = vim.api.nvim_get_current_tabpage(),
@@ -485,6 +724,15 @@ function M.open(opts)
 
   install_keymaps()
   render_files()
+  if active.selected_path then
+    for index, node in ipairs(active.visible_nodes) do
+      if node.type == "file" and node.path == active.selected_path then
+        active.file_index = index
+        break
+      end
+    end
+    render_files()
+  end
   render_diff(false)
   vim.api.nvim_set_current_win(diff_win)
 end
@@ -495,7 +743,7 @@ function M.export_to_file(path)
     return
   end
   path = path ~= "" and path or vim.fs.joinpath(active.root, "review.md")
-  vim.fn.writefile(vim.split(export.markdown(active.session), "\n", { plain = true }), path)
+  vim.fn.writefile(vim.split(export.markdown(active.session, active.target), "\n", { plain = true }), path)
   notify("Review written to " .. path)
 end
 

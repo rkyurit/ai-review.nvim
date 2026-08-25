@@ -11,8 +11,15 @@ git -C "$fixture" config user.name "AI Review Test"
 git -C "$fixture" config user.email "test@example.invalid"
 printf '%s\n' 'before' > "$fixture/tracked.txt"
 printf '%s\n' 'remove me' > "$fixture/deleted.txt"
-git -C "$fixture" add tracked.txt deleted.txt
-git -C "$fixture" commit -qm "fixture"
+printf '%s\n' 'one' > "$fixture/history.txt"
+mkdir -p "$fixture/src"
+printf '%s\n' 'local value = 1' 'return value' > "$fixture/src/plain.lua"
+git -C "$fixture" add tracked.txt deleted.txt history.txt src/plain.lua
+git -C "$fixture" commit -qm "base fixture"
+
+printf '%s\n' 'two' > "$fixture/history.txt"
+git -C "$fixture" add history.txt
+git -C "$fixture" commit -qm "second fixture"
 
 printf '%s\n' 'after' > "$fixture/tracked.txt"
 rm "$fixture/deleted.txt"

@@ -29,13 +29,20 @@ Open Neovim in a Git repository containing local changes and run:
 :AIReview
 ```
 
-The left pane lists changed files. The right pane shows the selected unified diff.
+The left pane shows the repository as a file tree. Changed files have `M`, `A`, `D`, or `?` markers. The right pane shows either the selected diff or the regular source file.
+
+Press `b` to choose between the working tree and a single commit. Press `B` to choose two commits and review the range between them.
 
 ### Keys
 
 | Key | Action |
 | --- | --- |
 | `<CR>` | Open the selected file from the file pane |
+| `h` / `l` | Collapse / expand a directory in the file pane |
+| `f` | Toggle changed files / all repository files |
+| `b` | Select the working tree or a single commit |
+| `B` | Select a commit range |
+| `v` | Toggle diff / regular source view for a changed file |
 | `c` | Comment on the current diff line |
 | Visual selection, then `c` | Comment on a range |
 | `e` | Edit the comment under the cursor |
@@ -48,6 +55,8 @@ The left pane lists changed files. The right pane shows the selected unified dif
 | `q` | Close the review |
 
 Comments are stored outside the repository under Neovim's state directory and are scoped by repository and branch.
+
+Unchanged files can be opened directly from the tree and commented on in the same way. Comments are additionally scoped to the selected review target, so working-tree and commit reviews do not mix.
 
 To write the review to a file instead of copying it:
 
@@ -70,6 +79,8 @@ Every key can be changed through the `keymaps` option. See `lua/ai-review/config
 ## Current scope
 
 - Reviews staged and unstaged changes against `HEAD` together.
+- Reviews an individual commit or a selected commit range.
+- Browses the full repository tree and comments on unchanged source files.
 - Includes untracked files.
 - Supports added, modified, deleted, copied, and renamed files.
 - Stores review comments locally and exports unresolved comments as Markdown.
