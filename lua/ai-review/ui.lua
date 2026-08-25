@@ -193,7 +193,7 @@ local function comment_visual()
   if start_row > end_row then
     start_row, end_row = end_row, start_row
   end
-  vim.cmd("normal! <Esc>")
+  vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
   add_comment(start_row, end_row)
 end
 

@@ -66,6 +66,30 @@ assert(markdown:find("Keep the original wording.", 1, true), "export is missing 
 
 require("ai-review").open({ cwd = root })
 assert(#vim.api.nvim_list_tabpages() == 2, "review tab was not created")
+
+local diff_buf = vim.api.nvim_get_current_buf()
+local diff_lines = vim.api.nvim_buf_get_lines(diff_buf, 0, -1, false)
+local added_row
+for row, line in ipairs(diff_lines) do
+  if line:sub(1, 1) == "+" and line:sub(1, 3) ~= "+++" then
+    added_row = row
+    break
+  end
+end
+assert(added_row, "no added line in review buffer")
+vim.api.nvim_win_set_cursor(0, { added_row, 0 })
+vim.ui.input = function(_, callback)
+  callback("Visual range comment")
+end
+vim.cmd("normal! V")
+vim.api.nvim_feedkeys("c", "x", false)
+vim.wait(50)
+
+local visual_export = vim.fs.joinpath(vim.env.AI_REVIEW_TEST_STATE, "visual-review.md")
+vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
+local exported = table.concat(vim.fn.readfile(visual_export), "\n")
+assert(exported:find("Visual range comment", 1, true), "visual comment was not exported")
+
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")
 
