@@ -145,8 +145,9 @@ local function render_files()
     vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s "):format(
       active.target.label,
       (active.changed_only and "Changed files" or "All files")
-        .. (" │ %s:Files %s:Commit %s:History %s:Help"):format(
+        .. (" │ %s:Files %s:Grep %s:Commit %s:History %s:Help"):format(
           key_label(config.options.keymaps.toggle_files),
+          key_label(config.options.keymaps.search_content),
           key_label(config.options.keymaps.select_target),
           key_label(config.options.keymaps.history),
           key_label(config.options.keymaps.help)
@@ -755,6 +756,48 @@ local function search_files()
   end)
 end
 
+local function search_content()
+  vim.ui.input({ prompt = "Search repository text: " }, function(query)
+    if not query or vim.trim(query) == "" or not active then
+      return
+    end
+    local ok, results = pcall(git.search, active.root, query, active.target, config.options.include_ignored)
+    if not ok then
+      notify(results, vim.log.levels.ERROR)
+      return
+    end
+    if #results == 0 then
+      notify("No text matches for " .. query)
+      return
+    end
+    vim.ui.select(results, {
+      prompt = ("Search text: %s"):format(query),
+      format_item = function(item)
+        return ("%s:%d:%d  %s"):format(item.path, item.line, item.column, vim.trim(item.text))
+      end,
+    }, function(choice)
+      if not choice or not active then
+        return
+      end
+      active.changed_only = false
+      if not vim.tbl_contains(active.all_files, choice.path) then
+        active.all_files[#active.all_files + 1] = choice.path
+        table.sort(active.all_files)
+      end
+      active.selected_path = choice.path
+      active.view_mode = "source"
+      active.expanded = tree.expand_for_paths({ choice.path })
+      render_files()
+      render_diff(false)
+      vim.api.nvim_set_current_win(active.diff_win)
+      local row = math.min(choice.line, math.max(1, vim.api.nvim_buf_line_count(active.diff_buf)))
+      local line = vim.api.nvim_buf_get_lines(active.diff_buf, row - 1, row, false)[1] or ""
+      local column = math.min(math.max(0, choice.column - 1), #line)
+      vim.api.nvim_win_set_cursor(active.diff_win, { row, column })
+    end)
+  end)
+end
+
 local function export_comments()
   local markdown = export.markdown(active.session, active.target)
   local copied = false
@@ -931,6 +974,7 @@ local function show_help()
     " Review targets and files",
     guide(keys.toggle_files, "Changed files / all files"),
     guide(keys.search_files, "Search files in the current mode"),
+    guide(keys.search_content, "Search repository text"),
     guide(keys.select_target, "Working tree / single commit"),
     guide(keys.select_range, "Select a commit range"),
     guide(keys.toggle_view, "Diff / regular source view"),
@@ -1004,6 +1048,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.expand, expand_node, "Expand directory or open file")
   map(active.file_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.file_buf, "n", keys.search_files, search_files, "Search files")
+  map(active.file_buf, "n", keys.search_content, search_content, "Search repository text")
   map(active.file_buf, "n", keys.comments, show_comments, "List review comments")
   map(active.file_buf, "n", keys.history, show_history, "Open review history")
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
@@ -1021,6 +1066,7 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.history, show_history, "Open review history")
   map(active.diff_buf, "n", keys.comments, show_comments, "List review comments")
   map(active.diff_buf, "n", keys.search_files, search_files, "Search files")
+  map(active.diff_buf, "n", keys.search_content, search_content, "Search repository text")
   map(active.diff_buf, "n", keys.toggle_view, toggle_view, "Toggle diff/source view")
   map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")

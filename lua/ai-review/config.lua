@@ -33,6 +33,7 @@ M.defaults = {
     history = "<localleader>h",
     comments = "<localleader>l",
     search_files = "<localleader>f",
+    search_content = "<localleader>g",
     help = "<localleader>k",
     toggle_files = "<localleader>t",
     toggle_view = "<localleader>v",

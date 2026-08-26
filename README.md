@@ -58,7 +58,10 @@ Use `<localleader>b` to select the working tree or one commit, and `<localleader
 ## Search and ignored files
 
 - `<localleader>f` searches files in the current tree mode.
+- `<localleader>g` searches file contents across the selected repository target.
 - `<localleader>l` searches active comments and jumps to the selected location.
+
+Search input and result selection use `vim.ui.input` and `vim.ui.select`, so LazyVim's configured UI/picker is reused automatically. Selecting a text result opens that file in the plugin's center pane at the matching line. Lowercase queries are case-insensitive; a query containing uppercase letters is case-sensitive.
 
 Git-ignored paths are hidden by default. Add exact paths or glob patterns with `include_ignored`. Included directories remain collapsed and are scanned only when expanded or searched with `<localleader>f` in all-files mode.
 
@@ -90,7 +93,7 @@ Archived comments never mix into the active review. In the history pane, press `
 | `<CR>` | Open the selected file |
 | `h` / `l` | Collapse / expand a directory |
 | `<localleader>t` | Toggle changed files / all files |
-| `<localleader>f` | Search files in the current mode |
+| `<localleader>f` / `<localleader>g` | Search file names / file contents |
 | `<localleader>b` / `<localleader>B` | Select one target / a commit range |
 | `<localleader>v` | Toggle diff / source view |
 | `<localleader>c` | Comment on the current line |
@@ -132,6 +135,7 @@ require("ai-review").setup({
   include_ignored = {},
   keymaps = {
     search_files = "<localleader>f",
+    search_content = "<localleader>g",
     comments = "<localleader>l",
     -- See lua/ai-review/config.lua for all defaults.
   },

@@ -281,6 +281,78 @@ function M.directory_files(root, path)
   return files
 end
 
+local function parse_grep(output, revision)
+  local results = {}
+  for line in output:gmatch("[^\r\n]+") do
+    if revision and line:sub(1, #revision + 1) == revision .. ":" then
+      line = line:sub(#revision + 2)
+    end
+    local path, line_number, column, text = line:match("^(.-):(%d+):(%d+):(.*)$")
+    if path then
+      results[#results + 1] = {
+        path = path,
+        line = tonumber(line_number),
+        column = tonumber(column),
+        text = text,
+      }
+    end
+  end
+  return results
+end
+
+function M.search(root, query, target, include_ignored)
+  local args = { "git", "grep", "-n", "--column", "-I", "-F" }
+  if query:lower() == query then
+    args[#args + 1] = "-i"
+  end
+  local revision
+  if target_kind(target) == "commit" then
+    revision = target.commit
+  elseif target_kind(target) == "range" then
+    revision = target.target
+  else
+    args[#args + 1] = "--untracked"
+    args[#args + 1] = "--exclude-standard"
+  end
+  args[#args + 1] = "--"
+  args[#args + 1] = query
+  if revision then
+    args[#args + 1] = revision
+  end
+  args[#args + 1] = "--"
+  local output = run(args, root, true)
+  local results = parse_grep(output, revision)
+
+  if not revision then
+    local seen = {}
+    for _, result in ipairs(results) do
+      seen[("%s:%d:%d"):format(result.path, result.line, result.column)] = true
+    end
+    for _, path in ipairs(included_ignored_paths(root, include_ignored)) do
+      local extra_args = { "git", "grep", "--no-index", "-n", "--column", "-I", "-F" }
+      if query:lower() == query then
+        extra_args[#extra_args + 1] = "-i"
+      end
+      extra_args[#extra_args + 1] = "--"
+      extra_args[#extra_args + 1] = query
+      extra_args[#extra_args + 1] = "--"
+      extra_args[#extra_args + 1] = path:gsub("/$", "")
+      local extra_output = run(extra_args, root, true)
+      for _, result in ipairs(parse_grep(extra_output)) do
+        local key = ("%s:%d:%d"):format(result.path, result.line, result.column)
+        if not seen[key] then
+          seen[key] = true
+          results[#results + 1] = result
+        end
+      end
+    end
+  end
+  table.sort(results, function(a, b)
+    return a.path == b.path and a.line < b.line or a.path < b.path
+  end)
+  return results
+end
+
 function M.read_file(root, path, target)
   if target_kind(target) == "commit" then
     return run({ "git", "show", target.commit .. ":" .. path }, root)

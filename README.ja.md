@@ -58,7 +58,10 @@ Gitリポジトリ内でNeovimを開き、次を実行します。
 ## 検索とignore対象
 
 - `<localleader>f`：現在のツリーモードからファイルを検索
+- `<localleader>g`：選択中のレビュー対象にあるファイルの内容を横断検索
 - `<localleader>l`：現在のコメントを検索して該当箇所へジャンプ
+
+検索入力と結果一覧には `vim.ui.input` と `vim.ui.select` を使うため、LazyVimで設定されたUI・pickerが自動的に利用されます。結果を選ぶと、プラグインの中央ペインで該当ファイルと行を開きます。検索語が小文字だけなら大文字小文字を区別せず、大文字を含む場合は区別します。
 
 Gitでignoreされているパスは初期状態では表示しません。必要なものだけ、パスまたはglobを `include_ignored` で指定できます。指定したフォルダは閉じた状態で表示し、展開時または全ファイルモードで `<localleader>f` を押したときだけ中身を読み込みます。
 
@@ -90,7 +93,7 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 | `<CR>` | 選択中のファイルを開く |
 | `h` / `l` | フォルダを閉じる／展開する |
 | `<localleader>t` | 変更ファイルのみ／全ファイルを切り替える |
-| `<localleader>f` | 現在のモードでファイルを検索する |
+| `<localleader>f` / `<localleader>g` | ファイル名／ファイル内容を検索する |
 | `<localleader>b` / `<localleader>B` | 対象を1つ選ぶ／コミット範囲を選ぶ |
 | `<localleader>v` | 差分表示／通常表示を切り替える |
 | `<localleader>c` | 現在行へコメントする |
@@ -132,6 +135,7 @@ require("ai-review").setup({
   include_ignored = {},
   keymaps = {
     search_files = "<localleader>f",
+    search_content = "<localleader>g",
     comments = "<localleader>l",
     -- 全デフォルト値は lua/ai-review/config.lua を参照してください。
   },

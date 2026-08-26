@@ -55,6 +55,9 @@ local range_files = git.changed_files(root, range)
 equal("history.txt", range_files[1].path, "range changed path")
 equal("one\n", git.read_file(root, "history.txt", base), "base source content")
 equal("two\n", git.read_file(root, "history.txt", latest), "commit source content")
+local commit_search = git.search(root, "one", base)
+equal("history.txt", commit_search[1].path, "commit text search path")
+equal(1, commit_search[1].line, "commit text search line")
 
 local repo_files = git.repo_files(root)
 assert(not vim.tbl_contains(repo_files, "ignored/"), "ignored directory should be hidden by default")
@@ -65,6 +68,13 @@ local ignored_entries = git.directory_entries(root, "ignored")
 assert(vim.tbl_contains(ignored_entries, "ignored/generated.txt"), "ignored directory could not be expanded lazily")
 local ignored_files = git.directory_files(root, "ignored")
 assert(vim.tbl_contains(ignored_files, "ignored/generated.txt"), "ignored directory file is missing from search")
+local text_results = git.search(root, "local value")
+equal("src/plain.lua", text_results[1].path, "repository text search path")
+equal(1, text_results[1].line, "repository text search line")
+equal(1, text_results[1].column, "repository text search column")
+equal(0, #git.search(root, "still visible in the full tree"), "ignored text should be excluded by default")
+local ignored_text_results = git.search(root, "still visible in the full tree", nil, { "ignored/" })
+equal("ignored/generated.txt", ignored_text_results[1].path, "included ignored text search path")
 assert(not by_path["ignored/generated.txt"], "ignored file must not appear in changed files")
 
 local visible_tree = tree.build(repo_files, files, tree.expand_for_paths(repo_files), false)
@@ -189,6 +199,12 @@ assert(
     return mapping.lhs == ",l" and mapping.desc == "List review comments"
   end),
   "file tree is missing the comment search mapping"
+)
+assert(
+  vim.iter(vim.api.nvim_buf_get_keymap(file_buf, "n")):any(function(mapping)
+    return mapping.lhs == ",g" and mapping.desc == "Search repository text"
+  end),
+  "file tree is missing repository text search"
 )
 local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
