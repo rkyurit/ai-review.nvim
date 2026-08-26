@@ -2,6 +2,7 @@ local git = require("ai-review.git")
 local state = require("ai-review.state")
 local export = require("ai-review.export")
 local clipboard = require("ai-review.clipboard")
+local reanchor = require("ai-review.reanchor")
 local tree = require("ai-review.tree")
 
 local root = assert(vim.env.AI_REVIEW_TEST_REPO)
@@ -21,6 +22,17 @@ assert(table.concat(wsl_providers[2].command, " "):find("UTF8Encoding", 1, true)
 assert(not vim.iter(wsl_providers):any(function(provider)
   return provider.executable == "clip.exe"
 end), "clip.exe must not receive UTF-8 text directly")
+
+local shifted_entries = {
+  { text = "inserted", kind = "source", new_line = 1 },
+  { text = "alpha", kind = "source", new_line = 2 },
+  { text = "beta", kind = "source", new_line = 3 },
+  { text = "gamma", kind = "source", new_line = 4 },
+}
+local shifted_anchor = reanchor.anchor({ side = "source", start_line = 2, context = "beta\ngamma" }, shifted_entries)
+assert(shifted_anchor, "shifted source context was not restored")
+equal(3, shifted_anchor.start_line, "shifted source start line")
+equal(4, shifted_anchor.end_line, "shifted source end line")
 
 equal(vim.uv.fs_realpath(root), vim.uv.fs_realpath(git.root(root)), "repository root")
 local repo_root = git.root(root)
@@ -228,6 +240,16 @@ vim.api.nvim_feedkeys("H", "x", false)
 equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not open")
 vim.api.nvim_feedkeys("q", "x", false)
 equal(windows_before_history, #vim.api.nvim_tabpage_list_wins(0), "history window did not close")
+
+vim.api.nvim_feedkeys("H", "x", false)
+equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not reopen")
+vim.api.nvim_feedkeys("r", "x", false)
+equal(windows_before_history, #vim.api.nvim_tabpage_list_wins(0), "history window did not close after restore")
+vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
+exported = table.concat(vim.fn.readfile(visual_export), "\n")
+assert(exported:find("Source file comment", 1, true), "restored review is missing source comment")
+local after_restore = state.load(repo_root, "main")
+equal(3, #after_restore.comments, "restored active comment count")
 
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")

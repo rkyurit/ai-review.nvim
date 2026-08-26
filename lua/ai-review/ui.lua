@@ -2,6 +2,7 @@ local config = require("ai-review.config")
 local clipboard = require("ai-review.clipboard")
 local export = require("ai-review.export")
 local git = require("ai-review.git")
+local reanchor = require("ai-review.reanchor")
 local state = require("ai-review.state")
 local tree = require("ai-review.tree")
 
@@ -90,25 +91,44 @@ local function render_comments()
   vim.api.nvim_buf_clear_namespace(active.diff_buf, comment_ns, 0, -1)
   local path = active.selected_path
   for _, comment in ipairs(comments_for_file(path)) do
-    local target_row
-    for row, entry in ipairs(active.parsed.lines) do
-      local side, line = comment_line(entry)
-      if side == comment.side and line == comment.start_line then
-        target_row = row
-        break
+    if not comment.orphaned then
+      local target_row
+      for row, entry in ipairs(active.parsed.lines) do
+        local side, line = comment_line(entry)
+        if side == comment.side and line == comment.start_line then
+          target_row = row
+          break
+        end
+      end
+      if target_row then
+        local virtual = {}
+        for index, line in ipairs(vim.split(comment.body, "\n", { plain = true })) do
+          local prefix = index == 1 and "  ● " or "    "
+          virtual[#virtual + 1] = { { prefix .. line, "AIReviewComment" } }
+        end
+        vim.api.nvim_buf_set_extmark(active.diff_buf, comment_ns, target_row - 1, 0, {
+          virt_lines = virtual,
+          virt_lines_above = false,
+        })
       end
     end
-    if target_row then
-      local virtual = {}
-      for index, line in ipairs(vim.split(comment.body, "\n", { plain = true })) do
-        local prefix = index == 1 and "  ● " or "    "
-        virtual[#virtual + 1] = { { prefix .. line, "AIReviewComment" } }
-      end
-      vim.api.nvim_buf_set_extmark(active.diff_buf, comment_ns, target_row - 1, 0, {
-        virt_lines = virtual,
-        virt_lines_above = false,
-      })
+  end
+  local orphaned = {}
+  for _, comment in ipairs(comments_for_file(path)) do
+    if comment.orphaned then
+      orphaned[#orphaned + 1] = {
+        {
+          ("  ⚠ Unplaced review from %s:%d — %s"):format(comment.path, comment.start_line or 0, comment.body),
+          "DiagnosticWarn",
+        },
+      }
     end
+  end
+  if #orphaned > 0 and vim.api.nvim_buf_line_count(active.diff_buf) > 0 then
+    vim.api.nvim_buf_set_extmark(active.diff_buf, comment_ns, 0, 0, {
+      virt_lines = orphaned,
+      virt_lines_above = true,
+    })
   end
 end
 
@@ -493,6 +513,89 @@ local function archive_comments()
   end)
 end
 
+local function source_context(comment)
+  local lines = {}
+  for _, text in ipairs(vim.split(comment.context or "", "\n", { plain = true })) do
+    local prefix = text:sub(1, 1)
+    local include = prefix == " "
+      or (comment.side == "new" and prefix == "+")
+      or (comment.side == "old" and prefix == "-")
+    if include and not text:match("^%+%+%+ ") and not text:match("^%-%-%- ") then
+      lines[#lines + 1] = text:sub(2)
+    end
+  end
+  return table.concat(lines, "\n")
+end
+
+local function entries_for_restore(comment)
+  local changed = active.changed_by_path[comment.path]
+  if comment.side ~= "source" and changed then
+    local ok, parsed = pcall(git.diff, active.root, changed, config.options.context_lines, active.target)
+    if ok then
+      return parsed.lines, comment.side
+    end
+  end
+  local ok, contents = pcall(git.read_file, active.root, comment.path, active.target)
+  if not ok then
+    return nil
+  end
+  return source_entries(contents), "source"
+end
+
+local function restore_archive(archive)
+  local restored = 0
+  local unplaced = 0
+  for _, archived in ipairs(archive.comments or {}) do
+    local duplicate = vim.iter(active.session.comments):any(function(comment)
+      return comment.archive_id == archive.id and comment.archive_comment_id == archived.id and comment_belongs(comment)
+    end)
+    if not duplicate then
+      local comment = vim.deepcopy(archived)
+      comment.id = tostring(vim.uv.hrtime()) .. ":" .. tostring(restored + unplaced + 1)
+      comment.archive_id = archive.id
+      comment.archive_comment_id = archived.id
+      comment.target_id = active.target.id
+      comment.target_label = active.target.label
+      comment.resolved = false
+      comment.orphaned = false
+
+      local entries, side = entries_for_restore(comment)
+      local anchored
+      if entries then
+        if side == "source" and comment.side ~= "source" then
+          comment.side = "source"
+          comment.context = source_context(archived)
+        end
+        anchored = reanchor.anchor(comment, entries)
+      end
+      if not anchored and side ~= "source" then
+        local source_ok, contents = pcall(git.read_file, active.root, comment.path, active.target)
+        if source_ok then
+          comment.side = "source"
+          comment.context = source_context(archived)
+          anchored = reanchor.anchor(comment, source_entries(contents))
+        end
+      end
+      if anchored then
+        comment.side = anchored.side
+        comment.start_line = anchored.start_line
+        comment.end_line = anchored.end_line
+        comment.context = anchored.context
+        comment.anchor_confidence = anchored.confidence
+        restored = restored + 1
+      else
+        comment.orphaned = true
+        unplaced = unplaced + 1
+      end
+      active.session.comments[#active.session.comments + 1] = comment
+    end
+  end
+  persist()
+  render_files()
+  render_diff(true)
+  notify(("Restored %d comments%s"):format(restored, unplaced > 0 and (", " .. unplaced .. " unplaced") or ""))
+end
+
 local function open_history_entry(archive)
   local lines = vim.split(archive.markdown or "", "\n", { plain = true })
   local width = math.min(100, vim.o.columns - 4)
@@ -523,6 +626,10 @@ local function open_history_entry(archive)
     local copied, provider = clipboard.copy(archive.markdown or "")
     notify(copied and ("Archived review copied with " .. provider) or "Archived review copied to unnamed register")
   end, { buffer = buf, silent = true })
+  vim.keymap.set("n", "r", function()
+    close_history()
+    restore_archive(archive)
+  end, { buffer = buf, silent = true, desc = "Restore archived review" })
 end
 
 local function show_history()
@@ -811,6 +918,7 @@ local function show_help()
     "   D                 Clear comments for this target",
     "   A                 Archive this review and clear it",
     "   H                 Open archived review history",
+    "   History: r/y/q     Restore / copy / close",
     "   ]c / [c           Next / previous comment",
     "   C                 List all comments",
     "   y                 Copy AI-ready review",
