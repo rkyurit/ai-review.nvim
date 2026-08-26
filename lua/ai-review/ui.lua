@@ -742,6 +742,40 @@ local function show_comments()
   end)
 end
 
+local function search_files()
+  local paths = {}
+  if active.changed_only then
+    for _, file in ipairs(active.files) do
+      paths[#paths + 1] = file.path
+    end
+  else
+    paths = vim.deepcopy(active.all_files)
+  end
+  if #paths == 0 then
+    notify("No files to search")
+    return
+  end
+  vim.ui.select(paths, {
+    prompt = active.changed_only and "Search changed files" or "Search all files",
+    format_item = function(path)
+      local changed = active.changed_by_path[path]
+      return ("%s %s"):format(changed and changed.status or " ", path)
+    end,
+  }, function(path)
+    if not path or not active then
+      return
+    end
+    active.expanded = tree.expand_for_paths({ path })
+    render_files()
+    for index, node in ipairs(active.visible_nodes) do
+      if node.type == "file" and node.path == path then
+        select_file(index)
+        break
+      end
+    end
+  end)
+end
+
 local function export_comments()
   local markdown = export.markdown(active.session, active.target)
   local copied = false
@@ -914,6 +948,7 @@ local function show_help()
     "",
     " Review targets and files",
     "   f                 Changed files / all files",
+    "   F                 Search files in the current file mode",
     "   b                 Working tree / single commit",
     "   B                 Select a commit range",
     "   v                 Diff / regular source view",
@@ -985,6 +1020,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.collapse, collapse_node, "Collapse directory")
   map(active.file_buf, "n", keys.expand, expand_node, "Expand directory or open file")
   map(active.file_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
+  map(active.file_buf, "n", keys.search_files, search_files, "Search files")
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.file_buf, "n", keys.help, show_help, "Show keyboard help")
@@ -999,6 +1035,7 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.archive_comments, archive_comments, "Archive review comments")
   map(active.diff_buf, "n", keys.history, show_history, "Open review history")
   map(active.diff_buf, "n", keys.comments, show_comments, "List review comments")
+  map(active.diff_buf, "n", keys.search_files, search_files, "Search files")
   map(active.diff_buf, "n", keys.toggle_view, toggle_view, "Toggle diff/source view")
   map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")

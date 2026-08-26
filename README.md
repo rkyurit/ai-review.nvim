@@ -42,6 +42,7 @@ Press `b` to choose between the working tree and a single commit. Press `B` to c
 | `<CR>` | Open the selected file from the file pane |
 | `h` / `l` | Collapse / expand a directory in the file pane |
 | `f` | Toggle changed files / all repository files |
+| `F` | Search files in the current file mode |
 | `b` | Select the working tree or a single commit |
 | `B` | Select a commit range |
 | `v` | Toggle diff / regular source view for a changed file |
@@ -52,7 +53,7 @@ Press `b` to choose between the working tree and a single commit. Press `B` to c
 | `D` | Clear all comments for the current review target |
 | `A` | Archive the current comment set as a named review |
 | `H` | Browse archived review history |
-| `C` | List all comments |
+| `C` | Search/list all comments and jump to one |
 | `]h` / `[h` | Next / previous diff hunk |
 | `]c` / `[c` | Next / previous comment |
 | `y` | Copy AI-ready Markdown to the clipboard |

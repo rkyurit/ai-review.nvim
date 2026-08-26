@@ -30,6 +30,7 @@ M.defaults = {
     archive_comments = "A",
     history = "H",
     comments = "C",
+    search_files = "F",
     help = "?",
     toggle_files = "f",
     toggle_view = "v",
