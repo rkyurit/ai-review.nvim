@@ -142,6 +142,16 @@ session.comments = {
     context = "-before\n+after",
     resolved = false,
   },
+  {
+    id = "ignored-comment",
+    path = "ignored/generated.txt",
+    side = "source",
+    start_line = 1,
+    end_line = 1,
+    body = "Ignored source comment",
+    context = "still visible in the full tree",
+    resolved = false,
+  },
 }
 state.save(session, path)
 local restored = state.load(repo_root, "main")
@@ -273,7 +283,7 @@ assert(vim.wo[file_win].winbar:find("Changed files", 1, true), "test did not ret
 vim.ui.select = function(items, _, callback)
   local source_comment
   for _, item in ipairs(items) do
-    if item.body == "Source file comment" then
+    if item.body == "Ignored source comment" then
       source_comment = item
       break
     end
@@ -282,8 +292,12 @@ vim.ui.select = function(items, _, callback)
 end
 vim.api.nvim_feedkeys("C", "x", false)
 assert(vim.wo[file_win].winbar:find("All files", 1, true), "source comment did not switch to the full tree")
-assert(vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("src/plain.lua", 1, true), "source comment file did not open")
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("ignored/generated.txt", 1, true),
+  "lazily loaded comment file did not open"
+)
 equal(1, vim.api.nvim_win_get_cursor(vim.fn.bufwinid(diff_buf))[1], "source comment did not jump to its line")
+vim.api.nvim_feedkeys("d", "x", false)
 
 vim.ui.input = function(_, callback)
   callback("First AI review")

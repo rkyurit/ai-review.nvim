@@ -741,6 +741,10 @@ local function show_comments()
     active.selected_path = choice.path
     active.view_mode = active.changed_by_path[choice.path] and "diff" or "source"
     if not active.changed_only then
+      if not vim.tbl_contains(active.all_files, choice.path) then
+        active.all_files[#active.all_files + 1] = choice.path
+        table.sort(active.all_files)
+      end
       active.expanded = tree.expand_for_paths({ choice.path })
       render_files()
     end
