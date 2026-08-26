@@ -69,7 +69,10 @@ equal("one\n", git.read_file(root, "history.txt", base), "base source content")
 equal("two\n", git.read_file(root, "history.txt", latest), "commit source content")
 
 local repo_files = git.repo_files(root)
-assert(vim.tbl_contains(repo_files, "ignored/generated.txt"), "ignored file is missing from repository tree")
+assert(vim.tbl_contains(repo_files, "ignored/"), "ignored directory is missing from repository tree")
+assert(not vim.tbl_contains(repo_files, "ignored/generated.txt"), "ignored directory contents should be loaded lazily")
+local ignored_entries = git.directory_entries(root, "ignored")
+assert(vim.tbl_contains(ignored_entries, "ignored/generated.txt"), "ignored directory could not be expanded lazily")
 assert(not by_path["ignored/generated.txt"], "ignored file must not appear in changed files")
 
 local visible_tree = tree.build(repo_files, files, tree.expand_for_paths(repo_files), false)
@@ -93,7 +96,7 @@ assert(
   "ignored directory should remain visible in the full tree"
 )
 assert(not vim.iter(collapsed_tree):any(function(node)
-  return node.path == "ignored/generated.txt" or node.path == "src/plain.lua"
+  return node.path == "src/plain.lua"
 end), "full repository tree should start collapsed")
 local nested_change = { { path = "src/plain.lua", status = "M" } }
 local changed_tree = tree.build(repo_files, nested_change, tree.expand_for_paths({ "src/plain.lua" }), true)

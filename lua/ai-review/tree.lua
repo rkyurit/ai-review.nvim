@@ -28,12 +28,14 @@ function M.build(paths, changed_files, expanded, changed_only)
 
   for _, path in ipairs(paths) do
     if not changed_only or statuses[path] then
-      local parts = vim.split(path, "/", { plain = true })
+      local directory_only = path:sub(-1) == "/"
+      local normalized = directory_only and path:sub(1, -2) or path
+      local parts = vim.split(normalized, "/", { plain = true })
       local parent = root
       local current = ""
       for index, part in ipairs(parts) do
         current = current == "" and part or (current .. "/" .. part)
-        if index == #parts then
+        if index == #parts and not directory_only then
           parent.children[#parent.children + 1] = {
             type = "file",
             name = part,
@@ -43,7 +45,13 @@ function M.build(paths, changed_files, expanded, changed_only)
         else
           local directory = directories[current]
           if not directory then
-            directory = { type = "directory", name = part, path = current, children = {} }
+            directory = {
+              type = "directory",
+              name = part,
+              path = current,
+              children = {},
+              ignored = directory_only and index == #parts,
+            }
             directories[current] = directory
             parent.children[#parent.children + 1] = directory
           end

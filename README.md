@@ -31,7 +31,7 @@ Open Neovim in a Git repository containing local changes and run:
 
 By default, the left pane shows only uncommitted files changed against `HEAD`. Changed files have `M`, `A`, `D`, or `?` markers. The right pane shows the selected diff.
 
-Press `f` when you need the full repository tree, including unchanged and Git-ignored files. An unchanged file opens as regular source and supports the same line and range comments. Full-tree mode starts with directories collapsed; changed-files mode automatically expands only the directories containing changes.
+Press `f` when you need the full repository tree, including unchanged and Git-ignored files. An unchanged file opens as regular source and supports the same line and range comments. Full-tree mode starts with directories collapsed; changed-files mode automatically expands only the directories containing changes. Large ignored directories are loaded only when you expand them.
 
 Press `b` to choose between the working tree and a single commit. Press `B` to choose two commits and review the range between them.
 

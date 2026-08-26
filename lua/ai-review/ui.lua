@@ -279,6 +279,14 @@ local function select_file(index)
     return
   end
   if node.type == "directory" then
+    if node.ignored and active.expanded[node.path] ~= true then
+      for _, path in ipairs(git.directory_entries(active.root, node.path)) do
+        if not vim.tbl_contains(active.all_files, path) then
+          active.all_files[#active.all_files + 1] = path
+        end
+      end
+      table.sort(active.all_files)
+    end
     active.expanded[node.path] = active.expanded[node.path] ~= true
     render_files()
     return
@@ -727,7 +735,9 @@ local function show_comments()
     if not choice or not active then
       return
     end
-    active.changed_only = false
+    if not active.changed_by_path[choice.path] then
+      active.changed_only = false
+    end
     active.expanded = tree.expand_for_paths({ choice.path })
     render_files()
     for index, file in ipairs(active.visible_nodes) do
@@ -753,7 +763,11 @@ local function search_files()
       paths[#paths + 1] = file.path
     end
   else
-    paths = vim.deepcopy(active.all_files)
+    for _, path in ipairs(active.all_files) do
+      if path:sub(-1) ~= "/" then
+        paths[#paths + 1] = path
+      end
+    end
   end
   if #paths == 0 then
     notify("No files to search")

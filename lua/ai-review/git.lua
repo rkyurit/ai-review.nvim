@@ -205,18 +205,37 @@ end
 
 function M.repo_files(root, target)
   local out
+  local ignored = ""
   if target_kind(target) == "commit" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.commit }, root)
   elseif target_kind(target) == "range" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.target }, root)
   else
-    -- The full tree intentionally includes ignored files. Changed-file discovery
-    -- still uses --exclude-standard, so ignored files never appear as changes.
-    out = run({ "git", "ls-files", "--cached", "--others", "-z" }, root)
+    out = run({ "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, root)
+    -- Keep ignored entries visible without recursively enumerating large trees
+    -- such as node_modules. A trailing slash is a directory marker for tree.build.
+    ignored = run({ "git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z" }, root)
   end
   local files = split_nul(out)
+  vim.list_extend(files, split_nul(ignored))
   table.sort(files)
   return files
+end
+
+function M.directory_entries(root, path)
+  local entries = {}
+  local handle = vim.fs.dir(vim.fs.joinpath(root, path))
+  if not handle then
+    return entries
+  end
+  for name, kind in handle do
+    if name ~= ".git" then
+      local child = path == "" and name or (path .. "/" .. name)
+      entries[#entries + 1] = kind == "directory" and (child .. "/") or child
+    end
+  end
+  table.sort(entries)
+  return entries
 end
 
 function M.read_file(root, path, target)
