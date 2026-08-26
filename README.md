@@ -1,8 +1,21 @@
 # ai-review.nvim
 
-Keyboard-first review of local Git changes, with inline comments that can be exported as an AI-ready prompt.
+[日本語](README.ja.md)
 
-The plugin is local-only. It does not require GitHub, an account, a network connection, or another Neovim plugin. It supports macOS, Linux, and Windows through WSL.
+A keyboard-first Neovim interface for reviewing local Git changes, writing inline comments, and exporting them as an AI-ready Markdown prompt.
+
+Everything stays local. No GitHub account, network connection, or external Neovim plugin is required. It works on macOS, Linux, and Windows through WSL.
+
+## Features
+
+- Review staged and unstaged changes against `HEAD`, a single commit, or a commit range.
+- Browse and comment on unchanged files as well as diffs.
+- Comment on one line or a Visual selection.
+- Search files and comments without typing paths or line numbers.
+- Archive named review snapshots outside the repository.
+- Read archived Markdown in a separate right-hand pane.
+- Export active comments as an AI-ready Markdown prompt.
+- Copy Japanese text safely from WSL.
 
 ## Requirements
 
@@ -15,94 +28,131 @@ With `lazy.nvim`:
 
 ```lua
 {
-  dir = vim.fn.expand("~/workspace/ai-review.nvim"),
+  "rkyurit/ai-review.nvim",
   cmd = { "AIReview", "AIReviewClose", "AIReviewExport" },
-  opts = {
-    -- Optional: show only these Git-ignored paths in the full tree.
-    include_ignored = { ".env", "generated/*.json" },
-  },
+  opts = {},
 }
 ```
 
-## Usage
+Run `:Lazy sync`, then restart Neovim.
 
-Open Neovim in a Git repository containing local changes and run:
+## Quick start
+
+Open Neovim inside a Git repository and run:
 
 ```vim
 :AIReview
 ```
 
-By default, the left pane shows only uncommitted files changed against `HEAD`. Changed files have `M`, `A`, `D`, or `?` markers. The right pane shows the selected diff.
+The initial layout shows changed files on the left and the selected diff in the center. The working-tree target includes staged, unstaged, and non-ignored untracked files.
 
-Press `f` when you need the full repository tree, including unchanged files. Git-ignored paths stay hidden by default; add exact paths or glob patterns to `include_ignored` when you need exceptions. An unchanged file opens as regular source and supports the same line and range comments. Full-tree mode starts with directories collapsed; changed-files mode automatically expands only the directories containing changes. Included ignored directories are loaded only when you expand them.
+1. Select a file with `j` / `k` and `<CR>`.
+2. Press `c` on a line, or select a range in Visual mode and press `c`.
+3. Press `y` to copy all active comments as Markdown for an AI assistant.
+4. After applying fixes, press `r` to refresh the diff. Comments without a current location remain visible as `Outdated review` entries and through `C`.
 
-`F` searches the current file mode. In all-files mode it also searches inside directories listed in `include_ignored`, loading those directories only when the search opens.
+Use `f` to switch between changed files and the full repository tree. Changed-file mode expands directories containing changes; all-files mode starts collapsed. Unchanged files open as regular source and accept the same comments.
 
-Press `b` to choose between the working tree and a single commit. Press `B` to choose two commits and review the range between them.
+Use `b` to select the working tree or one commit, and `B` to select a commit range.
 
-### Keys
+## Search and ignored files
+
+- `F` searches files in the current tree mode.
+- `C` searches active comments and jumps to the selected location.
+
+Git-ignored paths are hidden by default. Add exact paths or glob patterns with `include_ignored`. Included directories remain collapsed and are scanned only when expanded or searched with `F` in all-files mode.
+
+```lua
+{
+  "rkyurit/ai-review.nvim",
+  opts = {
+    include_ignored = { ".env", "generated/*.json", "sample-data/" },
+  },
+}
+```
+
+## Review history
+
+Press `A` to archive every active comment under a name and clear the active review. Archives are stored in Neovim's state directory, not in the repository.
+
+Press `H` from the file tree or review pane and select an archive. Its read-only Markdown opens on the right:
+
+```text
+[ file tree ] [ current file or diff ] [ archived review ]
+```
+
+Archived comments never mix into the active review. In the history pane, press `y` to copy or `q` to close it. Selecting another archive replaces the pane contents.
+
+## Key bindings
 
 | Key | Action |
 | --- | --- |
-| `<CR>` | Open the selected file from the file pane |
-| `h` / `l` | Collapse / expand a directory in the file pane |
-| `f` | Toggle changed files / all repository files |
-| `F` | Search files in the current file mode |
-| `b` | Select the working tree or a single commit |
-| `B` | Select a commit range |
-| `v` | Toggle diff / regular source view for a changed file |
-| `c` | Comment on the current diff line |
+| `<CR>` | Open the selected file |
+| `h` / `l` | Collapse / expand a directory |
+| `f` | Toggle changed files / all files |
+| `F` | Search files in the current mode |
+| `b` / `B` | Select one target / a commit range |
+| `v` | Toggle diff / source view |
+| `c` | Comment on the current line |
 | Visual selection, then `c` | Comment on a range |
-| `e` | Edit the comment under the cursor |
-| `d` | Delete the comment under the cursor |
-| `D` | Clear all comments for the current review target |
-| `A` | Archive the current comment set as a named review |
-| `H` | Browse archived review history |
-| `C` | Search/list all comments and jump to one |
-| `]h` / `[h` | Next / previous diff hunk |
+| `e` / `d` | Edit / delete the comment under the cursor |
+| `D` | Clear comments for the current target |
+| `C` | Search comments and jump |
 | `]c` / `[c` | Next / previous comment |
-| `y` | Copy AI-ready Markdown to the clipboard |
+| `]h` / `[h` | Next / previous diff hunk |
+| `A` | Archive and clear active comments |
+| `H` | Open review history on the right |
+| `y` | Copy active comments as Markdown |
 | `r` | Refresh the Git diff |
-| `q` | Close the review |
-| `?` | Open the complete keyboard guide |
+| `q` | Close review; in history, close that pane |
+| `?` | Show the keyboard guide |
 
-Comments are stored outside the repository under Neovim's state directory and are scoped by repository and branch.
+Every key can be changed through `keymaps`.
 
-Refreshing keeps comments in place without attempting to move them to different lines. If a saved location is no longer present in the refreshed diff or source view, the comment remains visible at the top as an `Outdated review` and is still available through `C`.
-
-Select an archive with `H` to open its read-only Markdown in a dedicated right pane. The file tree and current review remain usable in the left and center panes, and archived comments are never mixed into the active review. Press `y` in the history pane to copy it or `q` to close the pane. Selecting another archive replaces the right-pane contents.
-
-Unchanged files can be opened directly from the tree and commented on in the same way. Comments are additionally scoped to the selected review target, so working-tree and commit reviews do not mix.
-
-To write the review to a file instead of copying it:
+## Commands
 
 ```vim
-:AIReviewExport review.md
+:AIReview [directory]
+:AIReviewClose
+:AIReviewExport [path]
 ```
+
+`:AIReviewExport` defaults to `review.md` in the repository root.
 
 ## Configuration
 
 ```lua
 require("ai-review").setup({
+  storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "ai-review"),
   file_panel_width = 34,
+  history_panel_width = 60,
   context_lines = 3,
   export_to_clipboard = true,
+  changed_only = true,
+  include_ignored = {},
+  keymaps = {
+    search_files = "F",
+    comments = "C",
+    -- See lua/ai-review/config.lua for all defaults.
+  },
+  highlights = {
+    -- Override individual VS Code Dark-inspired colors here.
+  },
 })
 ```
 
-Every key can be changed through the `keymaps` option. See `lua/ai-review/config.lua` for defaults.
+The plugin uses its own highlight groups and does not replace the active colorscheme.
 
-The review UI uses its own VS Code Dark-inspired highlight groups and does not replace the active Neovim colorscheme. Every color can be overridden through the `highlights` option.
+## Storage and scope
+
+Comments and archives are JSON files under `storage_dir`, scoped by repository and branch. Comments are also scoped to the selected working-tree, commit, or range target.
+
+The plugin does not modify project files unless you explicitly export to a path inside the repository.
 
 ## WSL clipboard
 
-Export always writes to Neovim's unnamed register. On WSL, the plugin prefers `win32yank.exe`, then uses Windows PowerShell with UTF-8 input explicitly enabled. It intentionally avoids sending UTF-8 text directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. On other systems it supports Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
+Copying always updates Neovim's unnamed register. On WSL, the plugin prefers `win32yank.exe`, then Windows PowerShell with UTF-8 input enabled. It avoids sending UTF-8 directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. Other supported providers include Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
 
-## Current scope
+## License
 
-- Reviews staged and unstaged changes against `HEAD` together.
-- Reviews an individual commit or a selected commit range.
-- Browses the full repository tree and comments on unchanged source files.
-- Includes untracked files.
-- Supports added, modified, deleted, copied, and renamed files.
-- Stores review comments locally and exports unresolved comments as Markdown.
+MIT
