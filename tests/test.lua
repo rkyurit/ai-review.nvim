@@ -69,7 +69,10 @@ equal("one\n", git.read_file(root, "history.txt", base), "base source content")
 equal("two\n", git.read_file(root, "history.txt", latest), "commit source content")
 
 local repo_files = git.repo_files(root)
-local visible_tree = tree.build(repo_files, files, {}, false)
+assert(vim.tbl_contains(repo_files, "ignored/generated.txt"), "ignored file is missing from repository tree")
+assert(not by_path["ignored/generated.txt"], "ignored file must not appear in changed files")
+
+local visible_tree = tree.build(repo_files, files, tree.expand_for_paths(repo_files), false)
 assert(
   vim.iter(visible_tree):any(function(node)
     return node.type == "directory" and node.path == "src"
@@ -82,6 +85,27 @@ assert(
   end),
   "repository tree is missing source file"
 )
+local collapsed_tree = tree.build(repo_files, files, {}, false)
+assert(
+  vim.iter(collapsed_tree):any(function(node)
+    return node.type == "directory" and node.path == "ignored"
+  end),
+  "ignored directory should remain visible in the full tree"
+)
+assert(not vim.iter(collapsed_tree):any(function(node)
+  return node.path == "ignored/generated.txt" or node.path == "src/plain.lua"
+end), "full repository tree should start collapsed")
+local nested_change = { { path = "src/plain.lua", status = "M" } }
+local changed_tree = tree.build(repo_files, nested_change, tree.expand_for_paths({ "src/plain.lua" }), true)
+assert(
+  vim.iter(changed_tree):any(function(node)
+    return node.path == "src/plain.lua"
+  end),
+  "changed-file parents should be expanded"
+)
+assert(not vim.iter(changed_tree):any(function(node)
+  return node.path == "ignored"
+end), "ignored directories must not appear in changed-files mode")
 
 local modified = git.diff(root, by_path["tracked.txt"], 3)
 assert(#modified.hunks > 0, "modified file has no hunks")
@@ -195,6 +219,18 @@ vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
 vim.api.nvim_feedkeys("f", "x", false)
 
 local file_lines = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
+local src_row
+for row, line in ipairs(file_lines) do
+  if line:find("src", 1, true) then
+    src_row = row
+    break
+  end
+end
+assert(src_row, "collapsed source directory is missing from file tree")
+vim.api.nvim_set_current_win(file_win)
+vim.api.nvim_win_set_cursor(file_win, { src_row, 0 })
+vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
+file_lines = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 local source_row
 for row, line in ipairs(file_lines) do
   if line:find("plain.lua", 1, true) then

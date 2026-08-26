@@ -156,7 +156,7 @@ local function render_files()
     local suffix = count > 0 and ("  [%d]"):format(count) or ""
     local indent = string.rep("  ", file.depth)
     if file.type == "directory" then
-      local icon = active.expanded[file.path] == false and "▸" or "▾"
+      local icon = active.expanded[file.path] == true and "▾" or "▸"
       lines[#lines + 1] = ("%s %s%s %s/"):format(marker, indent, icon, file.name)
     else
       lines[#lines + 1] = ("%s %s%-1s %s%s"):format(marker, indent, file.status or " ", file.name, suffix)
@@ -275,7 +275,7 @@ local function select_file(index)
     return
   end
   if node.type == "directory" then
-    active.expanded[node.path] = active.expanded[node.path] == false
+    active.expanded[node.path] = active.expanded[node.path] ~= true
     render_files()
     return
   end
@@ -724,6 +724,7 @@ local function show_comments()
       return
     end
     active.changed_only = false
+    active.expanded = tree.expand_for_paths({ choice.path })
     render_files()
     for index, file in ipairs(active.visible_nodes) do
       if file.type == "file" and file.path == choice.path then
@@ -849,6 +850,13 @@ end
 
 local function toggle_files()
   active.changed_only = not active.changed_only
+  if active.changed_only then
+    active.expanded = tree.expand_for_paths(vim.tbl_map(function(file)
+      return file.path
+    end, active.files))
+  else
+    active.expanded = {}
+  end
   render_files()
   local node = current_node()
   if not node or node.type ~= "file" then
@@ -1056,7 +1064,9 @@ function M.open(opts)
     files = files,
     all_files = all_files,
     changed_by_path = changed_by_path,
-    expanded = {},
+    expanded = config.options.changed_only and tree.expand_for_paths(vim.tbl_map(function(file)
+      return file.path
+    end, files)) or {},
     changed_only = config.options.changed_only,
     visible_nodes = {},
     file_index = 1,

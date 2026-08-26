@@ -1,5 +1,18 @@
 local M = {}
 
+function M.expand_for_paths(paths)
+  local expanded = {}
+  for _, path in ipairs(paths) do
+    local parts = vim.split(path, "/", { plain = true })
+    local current = ""
+    for index = 1, #parts - 1 do
+      current = current == "" and parts[index] or (current .. "/" .. parts[index])
+      expanded[current] = true
+    end
+  end
+  return expanded
+end
+
 local function status_map(changed_files)
   local statuses = {}
   for _, file in ipairs(changed_files) do
@@ -51,7 +64,7 @@ function M.build(paths, changed_files, expanded, changed_only)
     for _, child in ipairs(node.children) do
       child.depth = depth
       visible[#visible + 1] = child
-      if child.type == "directory" and expanded[child.path] ~= false then
+      if child.type == "directory" and expanded[child.path] == true then
         flatten(child, depth + 1)
       end
     end

@@ -210,7 +210,9 @@ function M.repo_files(root, target)
   elseif target_kind(target) == "range" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.target }, root)
   else
-    out = run({ "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, root)
+    -- The full tree intentionally includes ignored files. Changed-file discovery
+    -- still uses --exclude-standard, so ignored files never appear as changes.
+    out = run({ "git", "ls-files", "--cached", "--others", "-z" }, root)
   end
   local files = split_nul(out)
   table.sort(files)
