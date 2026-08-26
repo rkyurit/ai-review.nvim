@@ -49,6 +49,9 @@ Press `b` to choose between the working tree and a single commit. Press `B` to c
 | Visual selection, then `c` | Comment on a range |
 | `e` | Edit the comment under the cursor |
 | `d` | Delete the comment under the cursor |
+| `D` | Clear all comments for the current review target |
+| `A` | Archive the current comment set as a named review |
+| `H` | Browse archived review history |
 | `C` | List all comments |
 | `]h` / `[h` | Next / previous diff hunk |
 | `]c` / `[c` | Next / previous comment |

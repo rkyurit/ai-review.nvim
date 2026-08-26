@@ -237,7 +237,7 @@ local function render_diff(keep_cursor)
   end
   vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
   active.rendered_mode = view_mode
-  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy ?:Help "):format(
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
     active.target.label,
     view_mode,
     path
@@ -409,6 +409,142 @@ local function delete_comment()
   persist()
   render_files()
   render_comments()
+end
+
+local function clear_comments()
+  local count = 0
+  for _, comment in ipairs(active.session.comments) do
+    if not comment.resolved and comment_belongs(comment) then
+      count = count + 1
+    end
+  end
+  if count == 0 then
+    notify("No review comments to clear")
+    return
+  end
+  vim.ui.select(
+    { "Cancel", ("Clear %d comments"):format(count) },
+    { prompt = "Clear comments for this review target?" },
+    function(choice)
+      if not choice or choice == "Cancel" or not active then
+        return
+      end
+      local kept = {}
+      for _, comment in ipairs(active.session.comments) do
+        if not comment_belongs(comment) then
+          kept[#kept + 1] = comment
+        end
+      end
+      active.session.comments = kept
+      persist()
+      render_files()
+      render_comments()
+      notify(("Cleared %d review comments"):format(count))
+    end
+  )
+end
+
+local function target_comments()
+  local comments = {}
+  for _, comment in ipairs(active.session.comments) do
+    if not comment.resolved and comment_belongs(comment) then
+      comments[#comments + 1] = comment
+    end
+  end
+  return comments
+end
+
+local function remove_target_comments()
+  local kept = {}
+  for _, comment in ipairs(active.session.comments) do
+    if not comment_belongs(comment) then
+      kept[#kept + 1] = comment
+    end
+  end
+  active.session.comments = kept
+end
+
+local function archive_comments()
+  local comments = target_comments()
+  if #comments == 0 then
+    notify("No review comments to archive")
+    return
+  end
+  local default_title = active.target.label .. " — " .. os.date("%Y-%m-%d %H:%M")
+  vim.ui.input({ prompt = "Review title: ", default = default_title }, function(title)
+    if not title or vim.trim(title) == "" or not active then
+      return
+    end
+    local archived_session = { comments = vim.deepcopy(comments) }
+    active.session.archives = active.session.archives or {}
+    active.session.archives[#active.session.archives + 1] = {
+      id = tostring(vim.uv.hrtime()),
+      title = title,
+      target = vim.deepcopy(active.target),
+      created_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+      comments = vim.deepcopy(comments),
+      markdown = export.markdown(archived_session, active.target),
+    }
+    remove_target_comments()
+    persist()
+    render_files()
+    render_comments()
+    notify(("Archived %d comments as %s"):format(#comments, title))
+  end)
+end
+
+local function open_history_entry(archive)
+  local lines = vim.split(archive.markdown or "", "\n", { plain = true })
+  local width = math.min(100, vim.o.columns - 4)
+  local height = math.min(math.max(10, #lines), vim.o.lines - 4)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].filetype = "markdown"
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = " " .. archive.title .. " ",
+    title_pos = "center",
+  })
+  local function close_history()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.keymap.set("n", "q", close_history, { buffer = buf, silent = true })
+  vim.keymap.set("n", "<Esc>", close_history, { buffer = buf, silent = true })
+  vim.keymap.set("n", "y", function()
+    local copied, provider = clipboard.copy(archive.markdown or "")
+    notify(copied and ("Archived review copied with " .. provider) or "Archived review copied to unnamed register")
+  end, { buffer = buf, silent = true })
+end
+
+local function show_history()
+  local archives = active.session.archives or {}
+  if #archives == 0 then
+    notify("No archived reviews")
+    return
+  end
+  local items = {}
+  for index = #archives, 1, -1 do
+    items[#items + 1] = archives[index]
+  end
+  vim.ui.select(items, {
+    prompt = "Review history",
+    format_item = function(item)
+      return ("%s  [%d comments]"):format(item.title, #(item.comments or {}))
+    end,
+  }, function(choice)
+    if choice and active then
+      open_history_entry(choice)
+    end
+  end)
 end
 
 local function jump_rows(rows, direction)
@@ -672,6 +808,9 @@ local function show_help()
     "   c                 Comment on current line",
     "   V, j/k, c         Comment on selected lines",
     "   e / d             Edit / delete comment",
+    "   D                 Clear comments for this target",
+    "   A                 Archive this review and clear it",
+    "   H                 Open archived review history",
     "   ]c / [c           Next / previous comment",
     "   C                 List all comments",
     "   y                 Copy AI-ready review",
@@ -740,6 +879,9 @@ local function install_keymaps()
   map(active.diff_buf, "x", keys.comment, comment_visual, "Comment selected lines")
   map(active.diff_buf, "n", keys.edit_comment, edit_comment, "Edit review comment")
   map(active.diff_buf, "n", keys.delete_comment, delete_comment, "Delete review comment")
+  map(active.diff_buf, "n", keys.clear_comments, clear_comments, "Clear comments for review target")
+  map(active.diff_buf, "n", keys.archive_comments, archive_comments, "Archive review comments")
+  map(active.diff_buf, "n", keys.history, show_history, "Open review history")
   map(active.diff_buf, "n", keys.comments, show_comments, "List review comments")
   map(active.diff_buf, "n", keys.toggle_view, toggle_view, "Toggle diff/source view")
   map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
@@ -836,7 +978,7 @@ function M.open(opts)
   vim.wo[file_win].statusline = " ? Help   f All files   b Commit   B Range   Enter Open "
   vim.wo[diff_win].wrap = false
   vim.wo[diff_win].cursorline = true
-  vim.wo[diff_win].statusline = " ? Help   c Comment   V…c Range   v Diff/Source   y Copy   q Close "
+  vim.wo[diff_win].statusline = " ? Help   c Comment   V…c Range   y Copy   A Archive   H History   q Close "
 
   install_keymaps()
   render_files()

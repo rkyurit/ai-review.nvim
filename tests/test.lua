@@ -23,6 +23,7 @@ assert(not vim.iter(wsl_providers):any(function(provider)
 end), "clip.exe must not receive UTF-8 text directly")
 
 equal(vim.uv.fs_realpath(root), vim.uv.fs_realpath(git.root(root)), "repository root")
+local repo_root = git.root(root)
 
 local files = git.changed_files(root)
 equal(3, #files, "changed file count")
@@ -88,7 +89,7 @@ assert(
   "untracked diff has no additions"
 )
 
-local session, path = state.load(root, "main")
+local session, path = state.load(repo_root, "main")
 session.comments = {
   {
     id = "1",
@@ -102,7 +103,7 @@ session.comments = {
   },
 }
 state.save(session, path)
-local restored = state.load(root, "main")
+local restored = state.load(repo_root, "main")
 equal("Keep the original wording.", restored.comments[1].body, "saved comment")
 
 local markdown = export.markdown(restored)
@@ -205,6 +206,28 @@ vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
 exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Source file comment", 1, true), "source comment was not exported")
 assert(exported:find("View: source file", 1, true), "source comment type was not exported")
+
+vim.ui.input = function(_, callback)
+  callback("First AI review")
+end
+vim.api.nvim_feedkeys("A", "x", false)
+vim.wait(50)
+vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
+exported = table.concat(vim.fn.readfile(visual_export), "\n")
+assert(exported:find("No unresolved comments", 1, true), "archiving did not clear active target comments")
+local after_archive = state.load(repo_root, "main")
+equal(1, #after_archive.archives, "review archive count")
+equal("First AI review", after_archive.archives[1].title, "review archive title")
+assert(after_archive.archives[1].markdown:find("Source file comment", 1, true), "archive is missing comments")
+
+local windows_before_history = #vim.api.nvim_tabpage_list_wins(0)
+vim.ui.select = function(items, _, callback)
+  callback(items[1])
+end
+vim.api.nvim_feedkeys("H", "x", false)
+equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not open")
+vim.api.nvim_feedkeys("q", "x", false)
+equal(windows_before_history, #vim.api.nvim_tabpage_list_wins(0), "history window did not close")
 
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")

@@ -11,15 +11,16 @@ function M.load(root, branch)
   local path = session_path(root, branch)
   local file = io.open(path, "r")
   if not file then
-    return { version = 1, root = root, branch = branch, comments = {} }, path
+    return { version = 1, root = root, branch = branch, comments = {}, archives = {} }, path
   end
   local contents = file:read("*a")
   file:close()
   local ok, data = pcall(vim.json.decode, contents)
   if not ok or type(data) ~= "table" then
-    return { version = 1, root = root, branch = branch, comments = {} }, path
+    return { version = 1, root = root, branch = branch, comments = {}, archives = {} }, path
   end
   data.comments = data.comments or {}
+  data.archives = data.archives or {}
   return data, path
 end
 
