@@ -63,6 +63,8 @@ assert(vim.tbl_contains(repo_files, "ignored/"), "configured ignored directory i
 assert(not vim.tbl_contains(repo_files, "ignored/generated.txt"), "ignored directory contents should be loaded lazily")
 local ignored_entries = git.directory_entries(root, "ignored")
 assert(vim.tbl_contains(ignored_entries, "ignored/generated.txt"), "ignored directory could not be expanded lazily")
+local ignored_files = git.directory_files(root, "ignored")
+assert(vim.tbl_contains(ignored_files, "ignored/generated.txt"), "ignored directory file is missing from search")
 assert(not by_path["ignored/generated.txt"], "ignored file must not appear in changed files")
 
 local visible_tree = tree.build(repo_files, files, tree.expand_for_paths(repo_files), false)

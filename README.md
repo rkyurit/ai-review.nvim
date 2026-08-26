@@ -36,6 +36,8 @@ By default, the left pane shows only uncommitted files changed against `HEAD`. C
 
 Press `f` when you need the full repository tree, including unchanged files. Git-ignored paths stay hidden by default; add exact paths or glob patterns to `include_ignored` when you need exceptions. An unchanged file opens as regular source and supports the same line and range comments. Full-tree mode starts with directories collapsed; changed-files mode automatically expands only the directories containing changes. Included ignored directories are loaded only when you expand them.
 
+`F` searches the current file mode. In all-files mode it also searches inside directories listed in `include_ignored`, loading those directories only when the search opens.
+
 Press `b` to choose between the working tree and a single commit. Press `B` to choose two commits and review the range between them.
 
 ### Keys

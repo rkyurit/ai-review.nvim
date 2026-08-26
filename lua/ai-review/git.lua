@@ -258,6 +258,29 @@ function M.directory_entries(root, path)
   return entries
 end
 
+function M.directory_files(root, path)
+  local files = {}
+  local pending = { path }
+  while #pending > 0 do
+    local directory = table.remove(pending)
+    local handle = vim.fs.dir(vim.fs.joinpath(root, directory))
+    if handle then
+      for name, kind in handle do
+        if name ~= ".git" then
+          local child = directory == "" and name or (directory .. "/" .. name)
+          if kind == "directory" then
+            pending[#pending + 1] = child
+          elseif kind == "file" or kind == "link" then
+            files[#files + 1] = child
+          end
+        end
+      end
+    end
+  end
+  table.sort(files)
+  return files
+end
+
 function M.read_file(root, path, target)
   if target_kind(target) == "commit" then
     return run({ "git", "show", target.commit .. ":" .. path }, root)

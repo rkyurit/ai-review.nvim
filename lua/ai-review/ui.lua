@@ -694,11 +694,21 @@ local function search_files()
       paths[#paths + 1] = file.path
     end
   else
+    local seen = {}
     for _, path in ipairs(active.all_files) do
-      if path:sub(-1) ~= "/" then
+      if path:sub(-1) == "/" then
+        for _, child in ipairs(git.directory_files(active.root, path:sub(1, -2))) do
+          if not seen[child] then
+            seen[child] = true
+            paths[#paths + 1] = child
+          end
+        end
+      elseif not seen[path] then
+        seen[path] = true
         paths[#paths + 1] = path
       end
     end
+    table.sort(paths)
   end
   if #paths == 0 then
     notify("No files to search")
@@ -713,6 +723,10 @@ local function search_files()
   }, function(path)
     if not path or not active then
       return
+    end
+    if not vim.tbl_contains(active.all_files, path) then
+      active.all_files[#active.all_files + 1] = path
+      table.sort(active.all_files)
     end
     active.expanded = tree.expand_for_paths({ path })
     render_files()
