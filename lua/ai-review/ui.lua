@@ -90,6 +90,7 @@ end
 local function render_comments()
   vim.api.nvim_buf_clear_namespace(active.diff_buf, comment_ns, 0, -1)
   local path = active.selected_path
+  local unplaced = {}
   for _, comment in ipairs(comments_for_file(path)) do
     if not comment.orphaned then
       local target_row
@@ -110,13 +111,16 @@ local function render_comments()
           virt_lines = virtual,
           virt_lines_above = false,
         })
+      else
+        unplaced[#unplaced + 1] = {
+          {
+            ("  ◌ Outdated review from %s:%d — %s"):format(comment.path, comment.start_line or 0, comment.body),
+            "DiagnosticWarn",
+          },
+        }
       end
-    end
-  end
-  local orphaned = {}
-  for _, comment in ipairs(comments_for_file(path)) do
-    if comment.orphaned then
-      orphaned[#orphaned + 1] = {
+    else
+      unplaced[#unplaced + 1] = {
         {
           ("  ⚠ Unplaced review from %s:%d — %s"):format(comment.path, comment.start_line or 0, comment.body),
           "DiagnosticWarn",
@@ -124,9 +128,9 @@ local function render_comments()
       }
     end
   end
-  if #orphaned > 0 and vim.api.nvim_buf_line_count(active.diff_buf) > 0 then
+  if #unplaced > 0 and vim.api.nvim_buf_line_count(active.diff_buf) > 0 then
     vim.api.nvim_buf_set_extmark(active.diff_buf, comment_ns, 0, 0, {
-      virt_lines = orphaned,
+      virt_lines = unplaced,
       virt_lines_above = true,
     })
   end

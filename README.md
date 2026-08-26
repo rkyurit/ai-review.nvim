@@ -63,6 +63,8 @@ Press `b` to choose between the working tree and a single commit. Press `B` to c
 
 Comments are stored outside the repository under Neovim's state directory and are scoped by repository and branch.
 
+Refreshing keeps comments in place without attempting to move them to different lines. If a saved location is no longer present in the refreshed diff or source view, the comment remains visible at the top as an `Outdated review` and is still available through `C`.
+
 Inside an archived review, press `r` to restore its comments onto the current review target, `y` to copy the archived Markdown, or `q` to close it. Restore searches the saved code context, so comments follow line-number shifts when the selected code still exists. Comments whose context no longer exists are retained as unplaced warnings instead of being silently dropped.
 
 Unchanged files can be opened directly from the tree and commented on in the same way. Comments are additionally scoped to the selected review target, so working-tree and commit reviews do not mix.
