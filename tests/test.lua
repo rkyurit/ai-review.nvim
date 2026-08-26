@@ -214,6 +214,14 @@ assert(exported:find("Visual range comment", 1, true), "visual comment was not e
 assert(exported:find("-before", 1, true), "visual comment context is missing deleted line")
 assert(exported:find("+after", 1, true), "visual comment context is missing added line")
 
+vim.ui.select = function(items, _, callback)
+  callback(items[1])
+end
+vim.api.nvim_feedkeys("C", "x", false)
+assert(vim.wo[file_win].winbar:find("Changed files", 1, true), "comment jump changed the file-tree mode")
+assert(vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("tracked.txt", 1, true), "comment jump did not open its file")
+equal(added_row, vim.api.nvim_win_get_cursor(vim.fn.bufwinid(diff_buf))[1], "comment jump did not reach its line")
+
 local windows_before_help = #vim.api.nvim_tabpage_list_wins(0)
 vim.api.nvim_feedkeys("?", "x", false)
 equal(windows_before_help + 1, #vim.api.nvim_tabpage_list_wins(0), "help window did not open")

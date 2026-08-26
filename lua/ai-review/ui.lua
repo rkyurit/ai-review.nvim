@@ -735,24 +735,23 @@ local function show_comments()
     if not choice or not active then
       return
     end
-    if not active.changed_by_path[choice.path] then
-      active.changed_only = false
+    active.selected_path = choice.path
+    active.view_mode = active.changed_by_path[choice.path] and "diff" or "source"
+    if not active.changed_only then
+      active.expanded = tree.expand_for_paths({ choice.path })
+      render_files()
     end
-    active.expanded = tree.expand_for_paths({ choice.path })
-    render_files()
-    for index, file in ipairs(active.visible_nodes) do
-      if file.type == "file" and file.path == choice.path then
-        select_file(index)
-        for row, entry in ipairs(active.parsed.lines) do
-          local side, line = comment_line(entry)
-          if side == choice.side and line == choice.start_line then
-            vim.api.nvim_win_set_cursor(active.diff_win, { row, 0 })
-            break
-          end
-        end
+    render_diff(false)
+    vim.api.nvim_set_current_win(active.diff_win)
+    local target_row = 1
+    for row, entry in ipairs(active.parsed.lines) do
+      local side, line = comment_line(entry)
+      if side == choice.side and line == choice.start_line then
+        target_row = row
         break
       end
     end
+    vim.api.nvim_win_set_cursor(active.diff_win, { target_row, 0 })
   end)
 end
 
