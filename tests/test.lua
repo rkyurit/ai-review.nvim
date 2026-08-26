@@ -319,23 +319,47 @@ equal("First AI review", after_archive.archives[1].title, "review archive title"
 assert(after_archive.archives[1].markdown:find("Source file comment", 1, true), "archive is missing comments")
 
 local windows_before_history = #vim.api.nvim_tabpage_list_wins(0)
+local select_history = true
 vim.ui.select = function(items, _, callback)
-  callback(items[1])
+  if select_history then
+    select_history = false
+    callback(items[1])
+  else
+    callback(nil)
+  end
 end
 vim.api.nvim_feedkeys("H", "x", false)
 equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not open")
+vim.api.nvim_feedkeys("A", "x", false)
+equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "A should not close or archive from history")
 vim.api.nvim_feedkeys("q", "x", false)
 equal(windows_before_history, #vim.api.nvim_tabpage_list_wins(0), "history window did not close")
 
+select_history = true
 vim.api.nvim_feedkeys("H", "x", false)
 equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not reopen")
 vim.api.nvim_feedkeys("r", "x", false)
+vim.wait(50)
 equal(windows_before_history, #vim.api.nvim_tabpage_list_wins(0), "history window did not close after restore")
 vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
 exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Source file comment", 1, true), "restored review is missing source comment")
 local after_restore = state.load(repo_root, "main")
 equal(3, #after_restore.comments, "restored active comment count")
+
+select_history = true
+vim.api.nvim_feedkeys("H", "x", false)
+vim.api.nvim_feedkeys("r", "x", false)
+vim.wait(50)
+local after_hide = state.load(repo_root, "main")
+equal(0, #after_hide.comments, "history toggle did not hide restored comments")
+
+select_history = true
+vim.api.nvim_feedkeys("H", "x", false)
+vim.api.nvim_feedkeys("r", "x", false)
+vim.wait(50)
+after_restore = state.load(repo_root, "main")
+equal(3, #after_restore.comments, "history toggle did not restore comments again")
 
 require("ai-review").close()
 assert(#vim.api.nvim_list_tabpages() == 1, "review tab was not closed")

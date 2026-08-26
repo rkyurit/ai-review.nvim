@@ -608,6 +608,31 @@ local function restore_archive(archive)
   notify(("Restored %d comments%s"):format(restored, unplaced > 0 and (", " .. unplaced .. " unplaced") or ""))
 end
 
+local function archive_is_visible(archive)
+  return vim.iter(active.session.comments):any(function(comment)
+    return comment.archive_id == archive.id and comment_belongs(comment)
+  end)
+end
+
+local function hide_archive(archive)
+  local kept = {}
+  local removed = 0
+  for _, comment in ipairs(active.session.comments) do
+    if comment.archive_id == archive.id and comment_belongs(comment) then
+      removed = removed + 1
+    else
+      kept[#kept + 1] = comment
+    end
+  end
+  active.session.comments = kept
+  persist()
+  render_files()
+  render_diff(true)
+  notify(("Hidden %d comments from %s"):format(removed, archive.title))
+end
+
+local show_history
+
 local function open_history_entry(archive)
   local lines = vim.split(archive.markdown or "", "\n", { plain = true })
   local width = math.min(100, vim.o.columns - 4)
@@ -640,11 +665,23 @@ local function open_history_entry(archive)
   end, { buffer = buf, silent = true })
   vim.keymap.set("n", "r", function()
     close_history()
-    restore_archive(archive)
-  end, { buffer = buf, silent = true, desc = "Restore archived review" })
+    if archive_is_visible(archive) then
+      hide_archive(archive)
+    else
+      restore_archive(archive)
+    end
+    vim.schedule(function()
+      if active then
+        show_history()
+      end
+    end)
+  end, { buffer = buf, silent = true, desc = "Toggle archived review" })
+  vim.keymap.set("n", "A", function()
+    notify("Close history before archiving the current review", vim.log.levels.WARN)
+  end, { buffer = buf, silent = true, desc = "Archive unavailable in history" })
 end
 
-local function show_history()
+show_history = function()
   local archives = active.session.archives or {}
   if #archives == 0 then
     notify("No archived reviews")
@@ -657,7 +694,8 @@ local function show_history()
   vim.ui.select(items, {
     prompt = "Review history",
     format_item = function(item)
-      return ("%s  [%d comments]"):format(item.title, #(item.comments or {}))
+      local marker = archive_is_visible(item) and "●" or "○"
+      return ("%s %s  [%d comments]"):format(marker, item.title, #(item.comments or {}))
     end,
   }, function(choice)
     if choice and active then
@@ -985,7 +1023,7 @@ local function show_help()
     "   D                 Clear comments for this target",
     "   A                 Archive this review and clear it",
     "   H                 Open archived review history",
-    "   History: r/y/q     Restore / copy / close",
+    "   History: r/y/q     Toggle / copy / close",
     "   ]c / [c           Next / previous comment",
     "   C                 List all comments",
     "   y                 Copy AI-ready review",
