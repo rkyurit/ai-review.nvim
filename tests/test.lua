@@ -1,6 +1,7 @@
 local git = require("ai-review.git")
 local state = require("ai-review.state")
 local export = require("ai-review.export")
+local clipboard = require("ai-review.clipboard")
 local tree = require("ai-review.tree")
 
 local root = assert(vim.env.AI_REVIEW_TEST_REPO)
@@ -12,6 +13,14 @@ local function equal(expected, actual, message)
     )
   end
 end
+
+local wsl_providers = clipboard._command_providers(true)
+equal("win32yank.exe", wsl_providers[1].executable, "preferred WSL clipboard provider")
+equal("powershell.exe", wsl_providers[2].executable, "UTF-8 WSL clipboard fallback")
+assert(table.concat(wsl_providers[2].command, " "):find("UTF8Encoding", 1, true), "PowerShell input is not UTF-8")
+assert(not vim.iter(wsl_providers):any(function(provider)
+  return provider.executable == "clip.exe"
+end), "clip.exe must not receive UTF-8 text directly")
 
 equal(vim.uv.fs_realpath(root), vim.uv.fs_realpath(git.root(root)), "repository root")
 

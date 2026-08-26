@@ -1,4 +1,5 @@
 local config = require("ai-review.config")
+local clipboard = require("ai-review.clipboard")
 local export = require("ai-review.export")
 local git = require("ai-review.git")
 local state = require("ai-review.state")
@@ -499,32 +500,14 @@ end
 
 local function export_comments()
   local markdown = export.markdown(active.session, active.target)
-  vim.fn.setreg('"', markdown)
   local copied = false
+  local provider
   if config.options.export_to_clipboard then
-    if vim.fn.has("clipboard") == 1 then
-      copied = pcall(vim.fn.setreg, "+", markdown)
-    end
-    if not copied then
-      local providers = {
-        { executable = "win32yank.exe", command = { "win32yank.exe", "-i", "--crlf" } },
-        { executable = "clip.exe", command = { "clip.exe" } },
-        { executable = "wl-copy", command = { "wl-copy" } },
-        { executable = "xclip", command = { "xclip", "-selection", "clipboard" } },
-        { executable = "pbcopy", command = { "pbcopy" } },
-      }
-      for _, provider in ipairs(providers) do
-        if vim.fn.executable(provider.executable) == 1 then
-          local result = vim.system(provider.command, { stdin = markdown }):wait()
-          copied = result.code == 0
-          if copied then
-            break
-          end
-        end
-      end
-    end
+    copied, provider = clipboard.copy(markdown)
+  else
+    vim.fn.setreg('"', markdown)
   end
-  notify(copied and "Review copied to system clipboard" or "Review copied to unnamed register")
+  notify(copied and ("Review copied with " .. provider) or "Review copied to unnamed register")
 end
 
 local function refresh()

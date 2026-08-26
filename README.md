@@ -83,7 +83,7 @@ The review UI uses its own VS Code Dark-inspired highlight groups and does not r
 
 ## WSL clipboard
 
-Export always writes to Neovim's unnamed register. For the Windows system clipboard, the plugin tries Neovim's configured clipboard provider first, followed by `win32yank.exe` and WSL's `clip.exe`. It also supports `wl-copy`, `xclip`, and macOS `pbcopy` when available.
+Export always writes to Neovim's unnamed register. On WSL, the plugin prefers `win32yank.exe`, then uses Windows PowerShell with UTF-8 input explicitly enabled. It intentionally avoids sending UTF-8 text directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. On other systems it supports Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
 
 ## Current scope
 
