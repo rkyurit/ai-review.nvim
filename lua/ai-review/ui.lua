@@ -809,7 +809,7 @@ end
 local function refresh()
   local selected_path = active.selected_path
   active.files = git.changed_files(active.root, active.target)
-  active.all_files = git.repo_files(active.root, active.target)
+  active.all_files = git.repo_files(active.root, active.target, config.options.include_ignored)
   active.changed_by_path = {}
   for _, file in ipairs(active.files) do
     active.changed_by_path[file.path] = file
@@ -1090,7 +1090,7 @@ function M.open(opts)
   end
   local target = working_target()
   local files = git.changed_files(root, target)
-  local all_files = git.repo_files(root, target)
+  local all_files = git.repo_files(root, target, config.options.include_ignored)
   local changed_by_path = {}
   for _, file in ipairs(files) do
     changed_by_path[file.path] = file

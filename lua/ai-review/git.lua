@@ -203,21 +203,41 @@ function M.commits(root, limit)
   return commits
 end
 
-function M.repo_files(root, target)
+local function included_ignored_paths(root, patterns)
+  local paths = {}
+  local seen = {}
+  local root_prefix = vim.fs.normalize(root) .. "/"
+  for _, pattern in ipairs(patterns or {}) do
+    for _, absolute in ipairs(vim.fn.globpath(root, pattern, false, true)) do
+      local normalized = vim.fs.normalize(absolute)
+      if normalized:sub(1, #root_prefix) == root_prefix then
+        local relative = normalized:sub(#root_prefix + 1)
+        if vim.fn.isdirectory(normalized) == 1 then
+          relative = relative .. "/"
+        end
+        if relative ~= "" and not seen[relative] then
+          seen[relative] = true
+          paths[#paths + 1] = relative
+        end
+      end
+    end
+  end
+  return paths
+end
+
+function M.repo_files(root, target, include_ignored)
   local out
-  local ignored = ""
+  local extras = {}
   if target_kind(target) == "commit" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.commit }, root)
   elseif target_kind(target) == "range" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.target }, root)
   else
     out = run({ "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, root)
-    -- Keep ignored entries visible without recursively enumerating large trees
-    -- such as node_modules. A trailing slash is a directory marker for tree.build.
-    ignored = run({ "git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z" }, root)
+    extras = included_ignored_paths(root, include_ignored)
   end
   local files = split_nul(out)
-  vim.list_extend(files, split_nul(ignored))
+  vim.list_extend(files, extras)
   table.sort(files)
   return files
 end

@@ -6,6 +6,7 @@ M.defaults = {
   context_lines = 3,
   export_to_clipboard = true,
   changed_only = true,
+  include_ignored = {},
   highlights = {
     selection = { bg = "#37373d", bold = true },
     directory = { fg = "#c5c5c5", bold = true },
