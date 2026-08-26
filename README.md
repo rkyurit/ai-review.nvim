@@ -47,20 +47,20 @@ Open Neovim inside a Git repository and run:
 The initial layout shows changed files on the left and the selected diff in the center. The working-tree target includes staged, unstaged, and non-ignored untracked files.
 
 1. Select a file with `j` / `k` and `<CR>`.
-2. Press `c` on a line, or select a range in Visual mode and press `c`.
-3. Press `y` to copy all active comments as Markdown for an AI assistant.
-4. After applying fixes, press `r` to refresh the diff. Comments without a current location remain visible as `Outdated review` entries and through `C`.
+2. Press `<localleader>c` on a line, or select a range in Visual mode and press `<localleader>c`.
+3. Press `<localleader>y` to copy all active comments as Markdown for an AI assistant.
+4. After applying fixes, press `<localleader>r` to refresh the diff. Comments without a current location remain visible as `Outdated review` entries and through `<localleader>l`.
 
-Use `f` to switch between changed files and the full repository tree. Changed-file mode expands directories containing changes; all-files mode starts collapsed. Unchanged files open as regular source and accept the same comments.
+Use `<localleader>t` to switch between changed files and the full repository tree. Changed-file mode expands directories containing changes; all-files mode starts collapsed. Unchanged files open as regular source and accept the same comments.
 
-Use `b` to select the working tree or one commit, and `B` to select a commit range.
+Use `<localleader>b` to select the working tree or one commit, and `<localleader>B` to select a commit range.
 
 ## Search and ignored files
 
-- `F` searches files in the current tree mode.
-- `C` searches active comments and jumps to the selected location.
+- `<localleader>f` searches files in the current tree mode.
+- `<localleader>l` searches active comments and jumps to the selected location.
 
-Git-ignored paths are hidden by default. Add exact paths or glob patterns with `include_ignored`. Included directories remain collapsed and are scanned only when expanded or searched with `F` in all-files mode.
+Git-ignored paths are hidden by default. Add exact paths or glob patterns with `include_ignored`. Included directories remain collapsed and are scanned only when expanded or searched with `<localleader>f` in all-files mode.
 
 ```lua
 {
@@ -73,9 +73,9 @@ Git-ignored paths are hidden by default. Add exact paths or glob patterns with `
 
 ## Review history
 
-Press `A` to archive every active comment under a name and clear the active review. Archives are stored in Neovim's state directory, not in the repository.
+Press `<localleader>a` to archive every active comment under a name and clear the active review. Archives are stored in Neovim's state directory, not in the repository.
 
-Press `H` from the file tree or review pane and select an archive. Its read-only Markdown opens on the right:
+Press `<localleader>h` from the file tree or review pane and select an archive. Its read-only Markdown opens on the right:
 
 ```text
 [ file tree ] [ current file or diff ] [ archived review ]
@@ -89,25 +89,25 @@ Archived comments never mix into the active review. In the history pane, press `
 | --- | --- |
 | `<CR>` | Open the selected file |
 | `h` / `l` | Collapse / expand a directory |
-| `f` | Toggle changed files / all files |
-| `F` | Search files in the current mode |
-| `b` / `B` | Select one target / a commit range |
-| `v` | Toggle diff / source view |
-| `c` | Comment on the current line |
-| Visual selection, then `c` | Comment on a range |
-| `e` / `d` | Edit / delete the comment under the cursor |
-| `D` | Clear comments for the current target |
-| `C` | Search comments and jump |
-| `]c` / `[c` | Next / previous comment |
+| `<localleader>t` | Toggle changed files / all files |
+| `<localleader>f` | Search files in the current mode |
+| `<localleader>b` / `<localleader>B` | Select one target / a commit range |
+| `<localleader>v` | Toggle diff / source view |
+| `<localleader>c` | Comment on the current line |
+| Visual selection, then `<localleader>c` | Comment on a range |
+| `<localleader>e` / `<localleader>d` | Edit / delete the comment under the cursor |
+| `<localleader>D` | Clear comments for the current target |
+| `<localleader>l` | Search comments and jump |
+| `]r` / `[r` | Next / previous comment |
 | `]h` / `[h` | Next / previous diff hunk |
-| `A` | Archive and clear active comments |
-| `H` | Open review history on the right |
-| `y` | Copy active comments as Markdown |
-| `r` | Refresh the Git diff |
+| `<localleader>a` | Archive and clear active comments |
+| `<localleader>h` | Open review history on the right |
+| `<localleader>y` | Copy active comments as Markdown |
+| `<localleader>r` | Refresh the Git diff |
 | `q` | Close review; in history, close that pane |
-| `?` | Show the keyboard guide |
+| `<localleader>k` | Show the keyboard guide |
 
-Every key can be changed through `keymaps`.
+`<localleader>` defaults to `\` unless your Neovim configuration changes `maplocalleader`; press it as a sequence, not a simultaneous chord. Every key can be changed through `keymaps`.
 
 ## Commands
 
@@ -131,8 +131,8 @@ require("ai-review").setup({
   changed_only = true,
   include_ignored = {},
   keymaps = {
-    search_files = "F",
-    comments = "C",
+    search_files = "<localleader>f",
+    comments = "<localleader>l",
     -- See lua/ai-review/config.lua for all defaults.
   },
   highlights = {

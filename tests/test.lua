@@ -178,9 +178,15 @@ for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 end
 
 local diff_buf = vim.api.nvim_get_current_buf()
+local diff_mappings = vim.api.nvim_buf_get_keymap(diff_buf, "n")
+for _, lhs in ipairs({ "b", "B", "c", "e", "d", "D", "A", "H", "C", "f", "F", "?", "v", "y", "r", "]c", "[c" }) do
+  assert(not vim.iter(diff_mappings):any(function(mapping)
+    return mapping.lhs == lhs
+  end), "standard Vim key is shadowed in review buffer: " .. lhs)
+end
 assert(
   vim.iter(vim.api.nvim_buf_get_keymap(file_buf, "n")):any(function(mapping)
-    return mapping.lhs == "C" and mapping.desc == "List review comments"
+    return mapping.lhs == ",l" and mapping.desc == "List review comments"
   end),
   "file tree is missing the comment search mapping"
 )
@@ -188,8 +194,11 @@ local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
 local selection_hl = vim.api.nvim_get_hl(0, { name = "AIReviewSelection" })
 assert(selection_hl.bg, "review highlight was not configured")
-assert(vim.wo[file_win].winbar:find("?:Help", 1, true), "file tree is missing persistent help hint")
-assert(vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("c:Comment", 1, true), "diff view is missing persistent key hints")
+assert(vim.wo[file_win].winbar:find(",k:Help", 1, true), "file tree is missing persistent help hint")
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find(",c:Comment", 1, true),
+  "diff view is missing persistent key hints"
+)
 local diff_lines = vim.api.nvim_buf_get_lines(diff_buf, 0, -1, false)
 local added_row
 local deleted_row
@@ -210,7 +219,7 @@ vim.ui.input = function(_, callback)
 end
 vim.cmd("normal! V")
 vim.api.nvim_win_set_cursor(0, { selection_end, 0 })
-vim.api.nvim_feedkeys("c", "x", false)
+vim.api.nvim_feedkeys(",c", "x", false)
 vim.wait(50)
 
 local visual_export = vim.fs.joinpath(vim.env.AI_REVIEW_TEST_STATE, "visual-review.md")
@@ -223,19 +232,19 @@ assert(exported:find("+after", 1, true), "visual comment context is missing adde
 vim.ui.select = function(items, _, callback)
   callback(items[1])
 end
-vim.api.nvim_feedkeys("C", "x", false)
+vim.api.nvim_feedkeys(",l", "x", false)
 assert(vim.wo[file_win].winbar:find("Changed files", 1, true), "comment jump changed the file-tree mode")
 assert(vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("tracked.txt", 1, true), "comment jump did not open its file")
 equal(added_row, vim.api.nvim_win_get_cursor(vim.fn.bufwinid(diff_buf))[1], "comment jump did not reach its line")
 
 local windows_before_help = #vim.api.nvim_tabpage_list_wins(0)
-vim.api.nvim_feedkeys("?", "x", false)
+vim.api.nvim_feedkeys(",k", "x", false)
 equal(windows_before_help + 1, #vim.api.nvim_tabpage_list_wins(0), "help window did not open")
 vim.api.nvim_feedkeys("q", "x", false)
 equal(windows_before_help, #vim.api.nvim_tabpage_list_wins(0), "help window did not close")
 
 vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
-vim.api.nvim_feedkeys("f", "x", false)
+vim.api.nvim_feedkeys(",t", "x", false)
 
 local file_lines = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 local src_row
@@ -267,14 +276,14 @@ vim.ui.input = function(_, callback)
   callback("Source file comment")
 end
 vim.cmd("normal! Vj")
-vim.api.nvim_feedkeys("c", "x", false)
+vim.api.nvim_feedkeys(",c", "x", false)
 vim.wait(50)
 vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
 exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Source file comment", 1, true), "source comment was not exported")
 assert(exported:find("View: source file", 1, true), "source comment type was not exported")
 
-vim.api.nvim_feedkeys("f", "x", false)
+vim.api.nvim_feedkeys(",t", "x", false)
 assert(vim.wo[file_win].winbar:find("Changed files", 1, true), "test did not return to changed-files mode")
 vim.ui.select = function(items, _, callback)
   local source_comment
@@ -286,19 +295,19 @@ vim.ui.select = function(items, _, callback)
   end
   callback(source_comment)
 end
-vim.api.nvim_feedkeys("C", "x", false)
+vim.api.nvim_feedkeys(",l", "x", false)
 assert(vim.wo[file_win].winbar:find("All files", 1, true), "source comment did not switch to the full tree")
 assert(
   vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("ignored/generated.txt", 1, true),
   "lazily loaded comment file did not open"
 )
 equal(1, vim.api.nvim_win_get_cursor(vim.fn.bufwinid(diff_buf))[1], "source comment did not jump to its line")
-vim.api.nvim_feedkeys("d", "x", false)
+vim.api.nvim_feedkeys(",d", "x", false)
 
 vim.ui.input = function(_, callback)
   callback("First AI review")
 end
-vim.api.nvim_feedkeys("A", "x", false)
+vim.api.nvim_feedkeys(",a", "x", false)
 vim.wait(50)
 vim.cmd("AIReviewExport " .. vim.fn.fnameescape(visual_export))
 exported = table.concat(vim.fn.readfile(visual_export), "\n")
@@ -312,7 +321,7 @@ local windows_before_history = #vim.api.nvim_tabpage_list_wins(0)
 vim.ui.select = function(items, _, callback)
   callback(items[1])
 end
-vim.api.nvim_feedkeys("H", "x", false)
+vim.api.nvim_feedkeys(",h", "x", false)
 equal(windows_before_history + 1, #vim.api.nvim_tabpage_list_wins(0), "history window did not open")
 assert(
   vim.wo[vim.api.nvim_get_current_win()].winbar:find("AI Review History │ First AI review", 1, true),

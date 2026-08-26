@@ -35,6 +35,10 @@ local function valid_window(win)
   return win and vim.api.nvim_win_is_valid(win)
 end
 
+local function key_label(key)
+  return key:gsub("<localleader>", vim.g.maplocalleader or "\\")
+end
+
 local function set_lines(buf, lines)
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -140,7 +144,13 @@ local function render_files()
   if valid_window(active.file_win) then
     vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s "):format(
       active.target.label,
-      (active.changed_only and "Changed files" or "All files") .. " │ f:Files b:Commit H:History ?:Help"
+      (active.changed_only and "Changed files" or "All files")
+        .. (" │ %s:Files %s:Commit %s:History %s:Help"):format(
+          key_label(config.options.keymaps.toggle_files),
+          key_label(config.options.keymaps.select_target),
+          key_label(config.options.keymaps.history),
+          key_label(config.options.keymaps.help)
+        )
     )
   end
   active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
@@ -260,10 +270,16 @@ local function render_diff(keep_cursor)
   end
   vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
   active.rendered_mode = view_mode
-  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ %s:Comment V…%s:Range %s:Copy %s:Archive %s:History %s:Help "):format(
     active.target.label,
     view_mode,
-    path
+    path,
+    key_label(config.options.keymaps.comment),
+    key_label(config.options.keymaps.comment),
+    key_label(config.options.keymaps.export),
+    key_label(config.options.keymaps.archive_comments),
+    key_label(config.options.keymaps.history),
+    key_label(config.options.keymaps.help)
   )
   render_comments()
   if keep_cursor and valid_window(active.diff_win) then
@@ -899,37 +915,41 @@ local function expand_node()
 end
 
 local function show_help()
+  local keys = config.options.keymaps
+  local function guide(key, description)
+    return ("   %-18s%s"):format(key_label(key), description)
+  end
   local lines = {
     " AI Review — keyboard guide",
     "",
     " Navigation",
-    "   Ctrl-h / Ctrl-l   Move between tree and review",
     "   j / k             Move cursor",
     "   Enter or l        Open file / expand directory",
     "   h                 Collapse directory",
-    "   ]h / [h           Next / previous diff hunk",
+    guide(keys.next_hunk .. " / " .. keys.prev_hunk, "Next / previous diff hunk"),
     "",
     " Review targets and files",
-    "   f                 Changed files / all files",
-    "   F                 Search files in the current file mode",
-    "   b                 Working tree / single commit",
-    "   B                 Select a commit range",
-    "   v                 Diff / regular source view",
-    "   r                 Refresh",
+    guide(keys.toggle_files, "Changed files / all files"),
+    guide(keys.search_files, "Search files in the current mode"),
+    guide(keys.select_target, "Working tree / single commit"),
+    guide(keys.select_range, "Select a commit range"),
+    guide(keys.toggle_view, "Diff / regular source view"),
+    guide(keys.refresh, "Refresh"),
     "",
     " Comments",
-    "   c                 Comment on current line",
-    "   V, j/k, c         Comment on selected lines",
-    "   e / d             Edit / delete comment",
-    "   D                 Clear comments for this target",
-    "   A                 Archive this review and clear it",
-    "   H                 Open archived review history",
+    guide(keys.comment, "Comment on current line"),
+    guide("V, j/k, " .. keys.comment, "Comment on selected lines"),
+    guide(keys.edit_comment .. " / " .. keys.delete_comment, "Edit / delete comment"),
+    guide(keys.clear_comments, "Clear comments for this target"),
+    guide(keys.archive_comments, "Archive this review and clear it"),
+    guide(keys.history, "Open archived review history"),
     "   History pane: y/q  Copy / close",
-    "   ]c / [c           Next / previous comment",
-    "   C                 List all comments",
-    "   y                 Copy AI-ready review",
+    guide(keys.next_comment .. " / " .. keys.prev_comment, "Next / previous comment"),
+    guide(keys.comments, "List all comments"),
+    guide(keys.export, "Copy AI-ready review"),
     "",
-    "   q                 Close review or this help",
+    guide(keys.help, "Close this help"),
+    guide(keys.close, "Close review or this help"),
   }
   local width = math.min(70, vim.o.columns - 4)
   local height = math.min(#lines, vim.o.lines - 4)
@@ -955,7 +975,7 @@ local function show_help()
   end
   vim.keymap.set("n", "q", close_help, { buffer = buf, silent = true })
   vim.keymap.set("n", "<Esc>", close_help, { buffer = buf, silent = true })
-  vim.keymap.set("n", "?", close_help, { buffer = buf, silent = true })
+  vim.keymap.set("n", keys.help, close_help, { buffer = buf, silent = true })
 end
 
 local function close()
