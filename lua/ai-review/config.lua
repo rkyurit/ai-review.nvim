@@ -3,6 +3,7 @@ local M = {}
 M.defaults = {
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "ai-review"),
   file_panel_width = 34,
+  history_panel_width = 60,
   context_lines = 3,
   export_to_clipboard = true,
   changed_only = true,

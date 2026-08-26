@@ -2,7 +2,6 @@ local config = require("ai-review.config")
 local clipboard = require("ai-review.clipboard")
 local export = require("ai-review.export")
 local git = require("ai-review.git")
-local reanchor = require("ai-review.reanchor")
 local state = require("ai-review.state")
 local tree = require("ai-review.tree")
 
@@ -28,27 +27,8 @@ local function comment_belongs(comment)
   return comment.target_id == active.target.id or (not comment.target_id and active.target.id == "working")
 end
 
-local function visible_archive()
-  for _, archive in ipairs(active.session.archives or {}) do
-    for _, comment in ipairs(active.session.comments or {}) do
-      if comment.archive_id == archive.id and comment_belongs(comment) then
-        return archive
-      end
-    end
-  end
-end
-
 local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = "AI Review" })
-end
-
-local function ensure_writable()
-  local archive = visible_archive()
-  if archive then
-    notify(("READ ONLY · History: %s · hide it with H → r to edit"):format(archive.title), vim.log.levels.WARN)
-    return false
-  end
-  return true
 end
 
 local function valid_window(win)
@@ -158,12 +138,9 @@ end
 local function render_files()
   local lines = {}
   if valid_window(active.file_win) then
-    local archive = visible_archive()
-    local mode = archive and ("READ ONLY · History: " .. archive.title) or "Editable"
-    vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s │ %s "):format(
+    vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s "):format(
       active.target.label,
-      active.changed_only and "Changed files" or "All files",
-      mode .. " │ f:Files b:Commit ?:Help"
+      (active.changed_only and "Changed files" or "All files") .. " │ f:Files b:Commit H:History ?:Help"
     )
   end
   active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
@@ -283,13 +260,10 @@ local function render_diff(keep_cursor)
   end
   vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
   active.rendered_mode = view_mode
-  local archive = visible_archive()
-  local mode = archive and ("READ ONLY · History: " .. archive.title) or "Editable"
-  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
     active.target.label,
     view_mode,
-    path,
-    mode
+    path
   )
   render_comments()
   if keep_cursor and valid_window(active.diff_win) then
@@ -325,9 +299,6 @@ local function select_file(index)
 end
 
 local function add_comment(start_row, end_row)
-  if not ensure_writable() then
-    return
-  end
   if not active.parsed then
     return
   end
@@ -440,9 +411,6 @@ local function comment_at_cursor_position()
 end
 
 local function edit_comment()
-  if not ensure_writable() then
-    return
-  end
   local comment = comment_at_cursor_position()
   if not comment then
     notify("No comment on this line", vim.log.levels.WARN)
@@ -458,9 +426,6 @@ local function edit_comment()
 end
 
 local function delete_comment()
-  if not ensure_writable() then
-    return
-  end
   local comment = comment_at_cursor_position()
   if not comment then
     notify("No comment on this line", vim.log.levels.WARN)
@@ -478,9 +443,6 @@ local function delete_comment()
 end
 
 local function clear_comments()
-  if not ensure_writable() then
-    return
-  end
   local count = 0
   for _, comment in ipairs(active.session.comments) do
     if not comment.resolved and comment_belongs(comment) then
@@ -534,9 +496,6 @@ local function remove_target_comments()
 end
 
 local function archive_comments()
-  if not ensure_writable() then
-    return
-  end
   local comments = target_comments()
   if #comments == 0 then
     notify("No review comments to archive")
@@ -565,143 +524,41 @@ local function archive_comments()
   end)
 end
 
-local function source_context(comment)
-  local lines = {}
-  for _, text in ipairs(vim.split(comment.context or "", "\n", { plain = true })) do
-    local prefix = text:sub(1, 1)
-    local include = prefix == " "
-      or (comment.side == "new" and prefix == "+")
-      or (comment.side == "old" and prefix == "-")
-    if include and not text:match("^%+%+%+ ") and not text:match("^%-%-%- ") then
-      lines[#lines + 1] = text:sub(2)
-    end
-  end
-  return table.concat(lines, "\n")
-end
-
-local function entries_for_restore(comment)
-  local changed = active.changed_by_path[comment.path]
-  if comment.side ~= "source" and changed then
-    local ok, parsed = pcall(git.diff, active.root, changed, config.options.context_lines, active.target)
-    if ok then
-      return parsed.lines, comment.side
-    end
-  end
-  local ok, contents = pcall(git.read_file, active.root, comment.path, active.target)
-  if not ok then
-    return nil
-  end
-  return source_entries(contents), "source"
-end
-
-local function restore_archive(archive)
-  local kept = {}
-  for _, comment in ipairs(active.session.comments) do
-    if not (comment.archive_id and comment_belongs(comment)) then
-      kept[#kept + 1] = comment
-    end
-  end
-  active.session.comments = kept
-  local restored = 0
-  local unplaced = 0
-  for _, archived in ipairs(archive.comments or {}) do
-    local duplicate = vim.iter(active.session.comments):any(function(comment)
-      return comment.archive_id == archive.id and comment.archive_comment_id == archived.id and comment_belongs(comment)
-    end)
-    if not duplicate then
-      local comment = vim.deepcopy(archived)
-      comment.id = tostring(vim.uv.hrtime()) .. ":" .. tostring(restored + unplaced + 1)
-      comment.archive_id = archive.id
-      comment.archive_comment_id = archived.id
-      comment.target_id = active.target.id
-      comment.target_label = active.target.label
-      comment.resolved = false
-      comment.orphaned = false
-
-      local entries, side = entries_for_restore(comment)
-      local anchored
-      if entries then
-        if side == "source" and comment.side ~= "source" then
-          comment.side = "source"
-          comment.context = source_context(archived)
-        end
-        anchored = reanchor.anchor(comment, entries)
-      end
-      if not anchored and side ~= "source" then
-        local source_ok, contents = pcall(git.read_file, active.root, comment.path, active.target)
-        if source_ok then
-          comment.side = "source"
-          comment.context = source_context(archived)
-          anchored = reanchor.anchor(comment, source_entries(contents))
-        end
-      end
-      if anchored then
-        comment.side = anchored.side
-        comment.start_line = anchored.start_line
-        comment.end_line = anchored.end_line
-        comment.context = anchored.context
-        comment.anchor_confidence = anchored.confidence
-        restored = restored + 1
-      else
-        comment.orphaned = true
-        unplaced = unplaced + 1
-      end
-      active.session.comments[#active.session.comments + 1] = comment
-    end
-  end
-  persist()
-  render_files()
-  render_diff(true)
-  notify(("Restored %d comments%s"):format(restored, unplaced > 0 and (", " .. unplaced .. " unplaced") or ""))
-end
-
-local function archive_is_visible(archive)
-  return vim.iter(active.session.comments):any(function(comment)
-    return comment.archive_id == archive.id and comment_belongs(comment)
-  end)
-end
-
-local function hide_archive(archive)
-  local kept = {}
-  local removed = 0
-  for _, comment in ipairs(active.session.comments) do
-    if comment.archive_id == archive.id and comment_belongs(comment) then
-      removed = removed + 1
-    else
-      kept[#kept + 1] = comment
-    end
-  end
-  active.session.comments = kept
-  persist()
-  render_files()
-  render_diff(true)
-  notify(("Hidden %d comments from %s"):format(removed, archive.title))
-end
-
-local show_history
-
 local function open_history_entry(archive)
   local lines = vim.split(archive.markdown or "", "\n", { plain = true })
-  local width = math.min(100, vim.o.columns - 4)
-  local height = math.min(math.max(10, #lines), vim.o.lines - 4)
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
+  local buf
+  local win
+  if valid_window(active.history_win) and active.history_buf and vim.api.nvim_buf_is_valid(active.history_buf) then
+    win = active.history_win
+    buf = active.history_buf
+    vim.api.nvim_set_current_win(win)
+  else
+    vim.api.nvim_set_current_win(active.diff_win)
+    vim.cmd("botright vsplit")
+    win = vim.api.nvim_get_current_win()
+    buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(win, buf)
+    vim.api.nvim_win_set_width(win, math.min(config.options.history_panel_width, math.max(30, vim.o.columns - 40)))
+    active.history_win = win
+    active.history_buf = buf
+  end
+  set_lines(buf, lines)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = "markdown"
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = height,
-    row = math.floor((vim.o.lines - height) / 2),
-    col = math.floor((vim.o.columns - width) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " " .. archive.title .. " ",
-    title_pos = "center",
-  })
+  vim.api.nvim_buf_set_name(buf, "ai-review://history/" .. archive.id)
+  vim.wo[win].winbar = (" AI Review History │ %s │ y:Copy q:Close "):format(archive.title)
   local function close_history()
-    if vim.api.nvim_win_is_valid(win) then
+    if valid_window(win) then
       vim.api.nvim_win_close(win, true)
+    end
+    if active then
+      active.history_win = nil
+      active.history_buf = nil
+      if valid_window(active.diff_win) then
+        vim.api.nvim_set_current_win(active.diff_win)
+      end
     end
   end
   vim.keymap.set("n", "q", close_history, { buffer = buf, silent = true })
@@ -710,25 +567,9 @@ local function open_history_entry(archive)
     local copied, provider = clipboard.copy(archive.markdown or "")
     notify(copied and ("Archived review copied with " .. provider) or "Archived review copied to unnamed register")
   end, { buffer = buf, silent = true })
-  vim.keymap.set("n", "r", function()
-    close_history()
-    if archive_is_visible(archive) then
-      hide_archive(archive)
-    else
-      restore_archive(archive)
-    end
-    vim.schedule(function()
-      if active then
-        show_history()
-      end
-    end)
-  end, { buffer = buf, silent = true, desc = "Toggle archived review" })
-  vim.keymap.set("n", "A", function()
-    notify("History preview is read-only", vim.log.levels.WARN)
-  end, { buffer = buf, silent = true, desc = "Archive unavailable in history" })
 end
 
-show_history = function()
+local function show_history()
   local archives = active.session.archives or {}
   if #archives == 0 then
     notify("No archived reviews")
@@ -741,8 +582,7 @@ show_history = function()
   vim.ui.select(items, {
     prompt = "Review history",
     format_item = function(item)
-      local marker = archive_is_visible(item) and "●" or "○"
-      return ("%s %s  [%d comments]"):format(marker, item.title, #(item.comments or {}))
+      return ("%s  [%d comments]"):format(item.title, #(item.comments or {}))
     end,
   }, function(choice)
     if choice and active then
@@ -1070,7 +910,7 @@ local function show_help()
     "   D                 Clear comments for this target",
     "   A                 Archive this review and clear it",
     "   H                 Open archived review history",
-    "   History: r/y/q     Toggle / copy / close",
+    "   History pane: y/q  Copy / close",
     "   ]c / [c           Next / previous comment",
     "   C                 List all comments",
     "   y                 Copy AI-ready review",
@@ -1131,6 +971,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.file_buf, "n", keys.search_files, search_files, "Search files")
   map(active.file_buf, "n", keys.comments, show_comments, "List review comments")
+  map(active.file_buf, "n", keys.history, show_history, "Open review history")
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.file_buf, "n", keys.help, show_help, "Show keyboard help")
@@ -1193,6 +1034,13 @@ function M.open(opts)
   table.sort(all_files)
   local branch = git.branch(root)
   local session, session_path = state.load(root, branch)
+  local original_comment_count = #session.comments
+  session.comments = vim.tbl_filter(function(comment)
+    return not comment.archive_id
+  end, session.comments)
+  if #session.comments ~= original_comment_count then
+    state.save(session, session_path)
+  end
 
   vim.cmd("tabnew")
   local diff_win = vim.api.nvim_get_current_win()

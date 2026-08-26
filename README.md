@@ -68,7 +68,7 @@ Comments are stored outside the repository under Neovim's state directory and ar
 
 Refreshing keeps comments in place without attempting to move them to different lines. If a saved location is no longer present in the refreshed diff or source view, the comment remains visible at the top as an `Outdated review` and is still available through `C`.
 
-Inside an archived review, press `r` to toggle its comments on or off, `y` to copy the archived Markdown, or `q` to close it. Only one archived review can be visible at a time. While one is visible, the entire review is marked `READ ONLY · History: <title>` and comment creation, editing, deletion, clearing, and `A` are disabled. Hide it through `H` and `r` to return to editable mode. The history list marks the visible archive with `●`, hidden archives with `○`, and reopens after a toggle. Restore searches the saved code context, so comments follow line-number shifts when the selected code still exists. Comments whose context no longer exists are retained as unplaced warnings instead of being silently dropped.
+Select an archive with `H` to open its read-only Markdown in a dedicated right pane. The file tree and current review remain usable in the left and center panes, and archived comments are never mixed into the active review. Press `y` in the history pane to copy it or `q` to close the pane. Selecting another archive replaces the right-pane contents.
 
 Unchanged files can be opened directly from the tree and commented on in the same way. Comments are additionally scoped to the selected review target, so working-tree and commit reviews do not mix.
 
