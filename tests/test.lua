@@ -188,6 +188,12 @@ for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 end
 
 local diff_buf = vim.api.nvim_get_current_buf()
+assert(
+  vim.iter(vim.api.nvim_buf_get_keymap(file_buf, "n")):any(function(mapping)
+    return mapping.lhs == "C" and mapping.desc == "List review comments"
+  end),
+  "file tree is missing the comment search mapping"
+)
 local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
 local selection_hl = vim.api.nvim_get_hl(0, { name = "AIReviewSelection" })
