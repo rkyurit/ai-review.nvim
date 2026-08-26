@@ -735,6 +735,9 @@ local function show_comments()
     if not choice or not active then
       return
     end
+    if not active.changed_by_path[choice.path] then
+      active.changed_only = false
+    end
     active.selected_path = choice.path
     active.view_mode = active.changed_by_path[choice.path] and "diff" or "source"
     if not active.changed_only then
