@@ -28,8 +28,27 @@ local function comment_belongs(comment)
   return comment.target_id == active.target.id or (not comment.target_id and active.target.id == "working")
 end
 
+local function visible_archive()
+  for _, archive in ipairs(active.session.archives or {}) do
+    for _, comment in ipairs(active.session.comments or {}) do
+      if comment.archive_id == archive.id and comment_belongs(comment) then
+        return archive
+      end
+    end
+  end
+end
+
 local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = "AI Review" })
+end
+
+local function ensure_writable()
+  local archive = visible_archive()
+  if archive then
+    notify(("READ ONLY · History: %s · hide it with H → r to edit"):format(archive.title), vim.log.levels.WARN)
+    return false
+  end
+  return true
 end
 
 local function valid_window(win)
@@ -139,9 +158,12 @@ end
 local function render_files()
   local lines = {}
   if valid_window(active.file_win) then
-    vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s "):format(
+    local archive = visible_archive()
+    local mode = archive and ("READ ONLY · History: " .. archive.title) or "Editable"
+    vim.wo[active.file_win].winbar = (" AI Review │ %s │ %s │ %s "):format(
       active.target.label,
-      (active.changed_only and "Changed files" or "All files") .. " │ f:Files b:Commit ?:Help"
+      active.changed_only and "Changed files" or "All files",
+      mode .. " │ f:Files b:Commit ?:Help"
     )
   end
   active.visible_nodes = tree.build(active.all_files, active.files, active.expanded, active.changed_only)
@@ -261,10 +283,13 @@ local function render_diff(keep_cursor)
   end
   vim.api.nvim_buf_set_name(active.diff_buf, ("ai-review://%s/%s"):format(view_mode, path))
   active.rendered_mode = view_mode
-  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
+  local archive = visible_archive()
+  local mode = archive and ("READ ONLY · History: " .. archive.title) or "Editable"
+  vim.wo[active.diff_win].winbar = (" AI Review │ %s │ %s │ %s │ %s │ c:Comment V…c:Range y:Copy A:Archive H:History ?:Help "):format(
     active.target.label,
     view_mode,
-    path
+    path,
+    mode
   )
   render_comments()
   if keep_cursor and valid_window(active.diff_win) then
@@ -300,6 +325,9 @@ local function select_file(index)
 end
 
 local function add_comment(start_row, end_row)
+  if not ensure_writable() then
+    return
+  end
   if not active.parsed then
     return
   end
@@ -412,6 +440,9 @@ local function comment_at_cursor_position()
 end
 
 local function edit_comment()
+  if not ensure_writable() then
+    return
+  end
   local comment = comment_at_cursor_position()
   if not comment then
     notify("No comment on this line", vim.log.levels.WARN)
@@ -427,6 +458,9 @@ local function edit_comment()
 end
 
 local function delete_comment()
+  if not ensure_writable() then
+    return
+  end
   local comment = comment_at_cursor_position()
   if not comment then
     notify("No comment on this line", vim.log.levels.WARN)
@@ -444,6 +478,9 @@ local function delete_comment()
 end
 
 local function clear_comments()
+  if not ensure_writable() then
+    return
+  end
   local count = 0
   for _, comment in ipairs(active.session.comments) do
     if not comment.resolved and comment_belongs(comment) then
@@ -497,6 +534,9 @@ local function remove_target_comments()
 end
 
 local function archive_comments()
+  if not ensure_writable() then
+    return
+  end
   local comments = target_comments()
   if #comments == 0 then
     notify("No review comments to archive")
@@ -555,6 +595,13 @@ local function entries_for_restore(comment)
 end
 
 local function restore_archive(archive)
+  local kept = {}
+  for _, comment in ipairs(active.session.comments) do
+    if not (comment.archive_id and comment_belongs(comment)) then
+      kept[#kept + 1] = comment
+    end
+  end
+  active.session.comments = kept
   local restored = 0
   local unplaced = 0
   for _, archived in ipairs(archive.comments or {}) do
@@ -677,7 +724,7 @@ local function open_history_entry(archive)
     end)
   end, { buffer = buf, silent = true, desc = "Toggle archived review" })
   vim.keymap.set("n", "A", function()
-    notify("Close history before archiving the current review", vim.log.levels.WARN)
+    notify("History preview is read-only", vim.log.levels.WARN)
   end, { buffer = buf, silent = true, desc = "Archive unavailable in history" })
 end
 

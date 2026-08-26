@@ -346,6 +346,16 @@ exported = table.concat(vim.fn.readfile(visual_export), "\n")
 assert(exported:find("Source file comment", 1, true), "restored review is missing source comment")
 local after_restore = state.load(repo_root, "main")
 equal(3, #after_restore.comments, "restored active comment count")
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("READ ONLY · History: First AI review", 1, true),
+  "visible history is missing the read-only indicator"
+)
+vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
+vim.api.nvim_feedkeys("A", "x", false)
+vim.wait(25)
+local after_blocked_archive = state.load(repo_root, "main")
+equal(1, #after_blocked_archive.archives, "A archived comments while history was read-only")
+equal(3, #after_blocked_archive.comments, "A changed comments while history was read-only")
 
 select_history = true
 vim.api.nvim_feedkeys("H", "x", false)
@@ -353,6 +363,10 @@ vim.api.nvim_feedkeys("r", "x", false)
 vim.wait(50)
 local after_hide = state.load(repo_root, "main")
 equal(0, #after_hide.comments, "history toggle did not hide restored comments")
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("Editable", 1, true),
+  "hiding history did not leave read-only mode"
+)
 
 select_history = true
 vim.api.nvim_feedkeys("H", "x", false)
