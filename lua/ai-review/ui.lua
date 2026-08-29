@@ -705,6 +705,34 @@ local function show_comments()
 end
 
 local function search_files()
+  if not active.changed_only and active.target.kind == "working" and #config.options.include_ignored == 0 then
+    local picker = require("ai-review.picker")
+    if picker.files({
+      cwd = active.root,
+      on_select = function(path)
+        if not active then
+          return
+        end
+        path = vim.fs.normalize(path)
+        local root = vim.fs.normalize(active.root)
+        if path:sub(1, #root + 1) == root .. "/" then
+          path = path:sub(#root + 2)
+        end
+        if not vim.tbl_contains(active.all_files, path) then
+          active.all_files[#active.all_files + 1] = path
+          table.sort(active.all_files)
+        end
+        active.selected_path = path
+        active.view_mode = active.changed_by_path[path] and "diff" or "source"
+        active.expanded = tree.expand_for_paths({ path })
+        render_files()
+        render_diff(false)
+        vim.api.nvim_set_current_win(active.diff_win)
+      end,
+    }) then
+      return
+    end
+  end
   local paths = {}
   if active.changed_only then
     for _, file in ipairs(active.files) do
@@ -757,6 +785,39 @@ local function search_files()
 end
 
 local function search_content()
+  if active.target.kind == "working" and #config.options.include_ignored == 0 then
+    local picker = require("ai-review.picker")
+    if picker.grep({
+      cwd = active.root,
+      on_select = function(path, pos)
+        if not active then
+          return
+        end
+        path = vim.fs.normalize(path)
+        local root = vim.fs.normalize(active.root)
+        if path:sub(1, #root + 1) == root .. "/" then
+          path = path:sub(#root + 2)
+        end
+        active.changed_only = false
+        if not vim.tbl_contains(active.all_files, path) then
+          active.all_files[#active.all_files + 1] = path
+          table.sort(active.all_files)
+        end
+        active.selected_path = path
+        active.view_mode = "source"
+        active.expanded = tree.expand_for_paths({ path })
+        render_files()
+        render_diff(false)
+        vim.api.nvim_set_current_win(active.diff_win)
+        local row = math.min(pos and pos[1] or 1, math.max(1, vim.api.nvim_buf_line_count(active.diff_buf)))
+        local line = vim.api.nvim_buf_get_lines(active.diff_buf, row - 1, row, false)[1] or ""
+        local column = math.min(math.max(0, pos and pos[2] or 0), #line)
+        vim.api.nvim_win_set_cursor(active.diff_win, { row, column })
+      end,
+    }) then
+      return
+    end
+  end
   vim.ui.input({ prompt = "Search repository text: " }, function(query)
     if not query or vim.trim(query) == "" or not active then
       return
@@ -958,6 +1019,11 @@ local function expand_node()
 end
 
 local function show_help()
+  local ok, which_key = pcall(require, "which-key")
+  if ok and type(which_key.show) == "function" then
+    which_key.show({ keys = vim.g.maplocalleader or "\\", mode = "n" })
+    return
+  end
   local keys = config.options.keymaps
   local function guide(key, description)
     return ("   %-18s%s"):format(key_label(key), description)

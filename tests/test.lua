@@ -3,6 +3,7 @@ local state = require("ai-review.state")
 local export = require("ai-review.export")
 local clipboard = require("ai-review.clipboard")
 local tree = require("ai-review.tree")
+local picker = require("ai-review.picker")
 
 local root = assert(vim.env.AI_REVIEW_TEST_REPO)
 
@@ -13,6 +14,53 @@ local function equal(expected, actual, message)
     )
   end
 end
+
+local picked_file
+local picked_position
+local closed_picker = false
+_G.Snacks = {
+  picker = {
+    files = function(opts)
+      opts.confirm({
+        close = function()
+          closed_picker = true
+        end,
+      }, { file = "src/plain.lua" })
+    end,
+    grep = function(opts)
+      opts.confirm({
+        close = function() end,
+      }, { file = "tracked.txt", pos = { 3, 4 } })
+    end,
+  },
+}
+assert(picker.available(), "Snacks picker should be detected")
+assert(
+  picker.files({
+    cwd = root,
+    on_select = function(path)
+      picked_file = path
+    end,
+  }),
+  "Snacks file picker was not used"
+)
+assert(
+  picker.grep({
+    cwd = root,
+    on_select = function(path, pos)
+      picked_position = { path, pos }
+    end,
+  }),
+  "Snacks grep picker was not used"
+)
+vim.wait(100, function()
+  return picked_file ~= nil and picked_position ~= nil
+end)
+equal("src/plain.lua", picked_file, "Snacks file selection")
+equal({ "tracked.txt", { 3, 4 } }, picked_position, "Snacks grep selection")
+assert(closed_picker, "Snacks picker should close before selection")
+_G.Snacks = nil
+assert(not picker.available(), "missing Snacks picker should be detected")
 
 local wsl_providers = clipboard._command_providers(true)
 equal("win32yank.exe", wsl_providers[1].executable, "preferred WSL clipboard provider")

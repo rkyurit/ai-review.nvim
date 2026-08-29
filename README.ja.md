@@ -112,6 +112,12 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 
 `<localleader>` はNeovim側で `maplocalleader` を変更していなければ `\` です。同時押しではなく、順番に入力します。すべてのキーは `keymaps` で変更できます。
 
+## LazyVimとの連携（任意）
+
+追加の依存関係はありません。[Snacks.nvim](https://github.com/folke/snacks.nvim) が使える場合、作業ツリーの全ファイル検索と全文検索にはSnacks標準pickerを使い、プレビューやLazyVim側で設定したレイアウトもそのまま利用します。picker内では `Alt-i` でignore対象、`Alt-h` で隠しファイル、`Alt-m` で最大化を切り替えられます。変更ファイルのみの検索、コミット／範囲の検索、`include_ignored` の選択的な例外を含む検索は、意味を正確に保つためプラグイン側のGit検索を使います。
+
+その他の一覧は引き続き `vim.ui.select` を通すため、LazyVimではSnacks表示になります。操作ヘルプはwhich-keyがあればそれを開き、なければ内蔵ガイドへ戻ります。クリップボードはWSL以外ではNeovim標準providerを優先し、必要に応じてOS別の代替手段を使います。
+
 ## コマンド
 
 ```vim
@@ -145,7 +151,7 @@ require("ai-review").setup({
 })
 ```
 
-独自のハイライトグループを使うため、現在のカラースキームは置き換えません。
+独自のハイライトグループを使うため、現在のカラースキームは置き換えません。完全にテーマ準拠の色にしたい場合は、設定から `DiffAdd`、`DiffDelete`、`DiagnosticInfo` などへlinkできます。
 
 ## 保存場所とスコープ
 
