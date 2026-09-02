@@ -3,8 +3,9 @@ set -eu
 
 plugin_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 fixture=$(mktemp -d)
+unborn_fixture=$(mktemp -d)
 state_dir=$(mktemp -d)
-trap 'rm -rf "$fixture" "$state_dir"' EXIT
+trap 'rm -rf "$fixture" "$unborn_fixture" "$state_dir"' EXIT
 
 git -C "$fixture" init -q -b main
 git -C "$fixture" config user.name "AI Review Test"
@@ -28,6 +29,9 @@ printf '%s\n' 'new file' > "$fixture/added.txt"
 mkdir -p "$fixture/ignored"
 printf '%s\n' 'still visible in the full tree' > "$fixture/ignored/generated.txt"
 
+git -C "$unborn_fixture" init -q -b main
+printf '%s\n' 'first file' > "$unborn_fixture/first.txt"
+
 cd "$plugin_root"
-AI_REVIEW_TEST_REPO="$fixture" AI_REVIEW_TEST_STATE="$state_dir" \
+AI_REVIEW_TEST_REPO="$fixture" AI_REVIEW_TEST_UNBORN_REPO="$unborn_fixture" AI_REVIEW_TEST_STATE="$state_dir" \
   nvim -u tests/minimal_init.lua -i NONE --headless "+luafile tests/test.lua" +qa

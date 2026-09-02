@@ -6,6 +6,7 @@ local tree = require("ai-review.tree")
 local picker = require("ai-review.picker")
 
 local root = assert(vim.env.AI_REVIEW_TEST_REPO)
+local unborn_root = assert(vim.env.AI_REVIEW_TEST_UNBORN_REPO)
 
 local function equal(expected, actual, message)
   if not vim.deep_equal(expected, actual) then
@@ -61,6 +62,15 @@ equal({ "tracked.txt", { 3, 4 } }, picked_position, "Snacks grep selection")
 assert(closed_picker, "Snacks picker should close before selection")
 _G.Snacks = nil
 assert(not picker.available(), "missing Snacks picker should be detected")
+
+local unborn_files = git.changed_files(unborn_root)
+equal(1, #unborn_files, "unborn repository changed file count")
+equal("first.txt", unborn_files[1].path, "unborn repository file path")
+equal("?", unborn_files[1].status, "unborn repository file status")
+local unborn_diff = git.diff(unborn_root, unborn_files[1], 3)
+assert(vim.iter(unborn_diff.lines):any(function(line)
+  return line.text == "+first file"
+end), "unborn repository diff is missing new content")
 
 local wsl_providers = clipboard._command_providers(true)
 equal("win32yank.exe", wsl_providers[1].executable, "preferred WSL clipboard provider")

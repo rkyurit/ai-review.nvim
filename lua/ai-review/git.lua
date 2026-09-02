@@ -35,6 +35,11 @@ local function target_kind(target)
   return target and target.kind or "working"
 end
 
+local function has_head(root)
+  local _, code = run({ "git", "rev-parse", "--verify", "HEAD" }, root, true)
+  return code == 0
+end
+
 local function name_status(root, target)
   if target_kind(target) == "commit" then
     return run(
@@ -42,9 +47,12 @@ local function name_status(root, target)
       root
     )
   elseif target_kind(target) == "range" then
-    return run({ "git", "diff", "--name-status", "-z", "--find-renames", target.base, target.target }, root)
+    return run({ "git", "diff", "--name-status", "-z", "--find-renames", target.base, target.target, "--" }, root)
   end
-  return run({ "git", "diff", "--name-status", "-z", "--find-renames", "HEAD" }, root)
+  if not has_head(root) then
+    return ""
+  end
+  return run({ "git", "diff", "--name-status", "-z", "--find-renames", "HEAD", "--" }, root)
 end
 
 function M.changed_files(root, target)
@@ -71,7 +79,11 @@ function M.changed_files(root, target)
   end
 
   if target_kind(target) == "working" then
-    local untracked = split_nul(run({ "git", "ls-files", "--others", "--exclude-standard", "-z" }, root))
+    local args = { "git", "ls-files", "--others", "--exclude-standard", "-z" }
+    if not has_head(root) then
+      args = { "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }
+    end
+    local untracked = split_nul(run(args, root))
     for _, path in ipairs(untracked) do
       files[#files + 1] = { status = "?", path = path }
     end
