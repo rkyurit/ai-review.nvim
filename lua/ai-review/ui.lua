@@ -954,7 +954,13 @@ local function apply_target(target)
   active.selected_path = nil
   active.file_index = 1
   active.view_mode = "diff"
+  active.changed_only = true
+  active.expanded = {}
   refresh()
+  active.expanded = tree.expand_for_paths(vim.tbl_map(function(file)
+    return file.path
+  end, active.files))
+  render_files()
   for index, node in ipairs(active.visible_nodes) do
     if node.type == "file" then
       select_file(index)

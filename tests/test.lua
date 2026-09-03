@@ -329,6 +329,35 @@ equal(original_file_width, vim.api.nvim_win_get_width(file_win), "file tree widt
 vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
 local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
+
+vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
+vim.api.nvim_feedkeys(",t", "x", false)
+assert(vim.wo[file_win].winbar:find("All files", 1, true), "test did not enter all-files mode")
+vim.ui.select = function(items, opts, callback)
+  local wanted = opts.prompt == "PR base branch" and "review-base" or "review-head"
+  callback(vim.iter(items):find(function(item)
+    return item.name == wanted
+  end))
+end
+vim.api.nvim_feedkeys(",p", "x", false)
+assert(vim.wo[file_win].winbar:find("Changed files", 1, true), "PR selection did not reset to changed files")
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("review-base...review-head │ diff │ history.txt", 1, true),
+  "PR selection did not open its first diff"
+)
+vim.ui.select = function(items, _, callback)
+  callback(items[1])
+end
+vim.api.nvim_feedkeys(",b", "x", false)
+local working_tree_rows = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
+for row, line in ipairs(working_tree_rows) do
+  if line:find("tracked.txt", 1, true) then
+    vim.api.nvim_set_current_win(file_win)
+    vim.api.nvim_win_set_cursor(file_win, { row, 0 })
+    vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
+    break
+  end
+end
 local selection_hl = vim.api.nvim_get_hl(0, { name = "AIReviewSelection" })
 assert(selection_hl.bg, "review highlight was not configured")
 assert(vim.wo[file_win].winbar:find(",k:Help", 1, true), "file tree is missing persistent help hint")
