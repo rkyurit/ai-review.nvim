@@ -92,6 +92,8 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 | --- | --- |
 | `<CR>` | 選択中のファイルを開く |
 | `h` / `l` | フォルダを閉じる／展開する |
+| `<localleader>s` | ファイルツリーペインを隠す／再表示する |
+| `<localleader><` / `<localleader>>` | ファイルツリーペインを狭く／広くする |
 | `<localleader>t` | 変更ファイルのみ／全ファイルを切り替える |
 | `<localleader>f` / `<localleader>g` | ファイル名／ファイル内容を検索する |
 | `<localleader>b` / `<localleader>B` | 対象を1つ選ぶ／コミット範囲を選ぶ |

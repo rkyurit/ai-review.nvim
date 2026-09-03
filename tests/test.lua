@@ -286,6 +286,27 @@ assert(
   end),
   "file tree is missing repository text search"
 )
+for _, mapping in ipairs({
+  { lhs = ",s", desc = "Toggle file tree" },
+  { lhs = ",<lt>", desc = "Narrow file tree" },
+  { lhs = ",>", desc = "Widen file tree" },
+}) do
+  assert(vim.iter(diff_mappings):any(function(item)
+    return item.lhs == mapping.lhs and item.desc == mapping.desc
+  end), "diff view is missing file-tree mapping: " .. mapping.lhs)
+end
+local original_file_width = vim.api.nvim_win_get_width(file_win)
+vim.api.nvim_feedkeys(",>", "x", false)
+equal(original_file_width + 4, vim.api.nvim_win_get_width(file_win), "file tree did not widen")
+vim.api.nvim_feedkeys(",<", "x", false)
+equal(original_file_width, vim.api.nvim_win_get_width(file_win), "file tree did not narrow")
+vim.api.nvim_feedkeys(",s", "x", false)
+assert(vim.fn.bufwinid(file_buf) == -1, "file tree did not close")
+vim.api.nvim_feedkeys(",s", "x", false)
+file_win = vim.fn.bufwinid(file_buf)
+assert(file_win ~= -1, "file tree did not reopen")
+equal(original_file_width, vim.api.nvim_win_get_width(file_win), "file tree width was not restored")
+vim.api.nvim_set_current_win(vim.fn.bufwinid(diff_buf))
 local initial_tree = vim.api.nvim_buf_get_lines(file_buf, 0, -1, false)
 assert(not table.concat(initial_tree, "\n"):find("plain.lua", 1, true), "unchanged file should be hidden by default")
 local selection_hl = vim.api.nvim_get_hl(0, { name = "AIReviewSelection" })

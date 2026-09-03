@@ -92,6 +92,8 @@ Archived comments never mix into the active review. In the history pane, press `
 | --- | --- |
 | `<CR>` | Open the selected file |
 | `h` / `l` | Collapse / expand a directory |
+| `<localleader>s` | Hide / show the file-tree panel |
+| `<localleader><` / `<localleader>>` | Narrow / widen the file-tree panel |
 | `<localleader>t` | Toggle changed files / all files |
 | `<localleader>f` / `<localleader>g` | Search file names / file contents |
 | `<localleader>b` / `<localleader>B` | Select one target / a commit range |

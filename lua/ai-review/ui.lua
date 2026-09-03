@@ -1059,6 +1059,46 @@ local function expand_node()
   end
 end
 
+local function configure_file_window(win)
+  vim.wo[win].number = false
+  vim.wo[win].relativenumber = false
+  vim.wo[win].signcolumn = "no"
+  vim.wo[win].cursorline = true
+  vim.wo[win].statusline = " ? Help   f All files   b Commit   B Range   Enter Open "
+end
+
+local function toggle_file_panel()
+  if valid_window(active.file_win) then
+    active.file_panel_width = vim.api.nvim_win_get_width(active.file_win)
+    vim.api.nvim_win_close(active.file_win, false)
+    active.file_win = nil
+    if valid_window(active.diff_win) then
+      vim.api.nvim_set_current_win(active.diff_win)
+    end
+    return
+  end
+  if not valid_window(active.diff_win) then
+    return
+  end
+  vim.api.nvim_set_current_win(active.diff_win)
+  vim.cmd("topleft vsplit")
+  active.file_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(active.file_win, active.file_buf)
+  vim.api.nvim_win_set_width(active.file_win, active.file_panel_width)
+  configure_file_window(active.file_win)
+  render_files()
+end
+
+local function resize_file_panel(delta)
+  if not valid_window(active.file_win) then
+    notify("File tree is hidden; use " .. key_label(config.options.keymaps.toggle_file_panel) .. " to show it")
+    return
+  end
+  local maximum = math.max(20, vim.o.columns - 20)
+  active.file_panel_width = math.max(20, math.min(maximum, vim.api.nvim_win_get_width(active.file_win) + delta))
+  vim.api.nvim_win_set_width(active.file_win, active.file_panel_width)
+end
+
 local function show_help()
   local ok, which_key = pcall(require, "which-key")
   if ok and type(which_key.show) == "function" then
@@ -1080,6 +1120,8 @@ local function show_help()
     "",
     " Review targets and files",
     guide(keys.toggle_files, "Changed files / all files"),
+    guide(keys.toggle_file_panel, "Hide / show the file tree"),
+    guide(keys.narrow_file_panel .. " / " .. keys.widen_file_panel, "Narrow / widen the file tree"),
     guide(keys.search_files, "Search files in the current mode"),
     guide(keys.search_content, "Search repository text"),
     guide(keys.select_target, "Working tree / single commit"),
@@ -1136,10 +1178,14 @@ local function close()
   end
   persist()
   local tab = active.tab
+  local file_buf = active.file_buf
   active = nil
   if vim.api.nvim_tabpage_is_valid(tab) then
     vim.api.nvim_set_current_tabpage(tab)
     vim.cmd("tabclose")
+  end
+  if file_buf and vim.api.nvim_buf_is_valid(file_buf) then
+    vim.api.nvim_buf_delete(file_buf, { force = true })
   end
 end
 
@@ -1162,6 +1208,13 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.file_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
+  map(active.file_buf, "n", keys.toggle_file_panel, toggle_file_panel, "Toggle file tree")
+  map(active.file_buf, "n", keys.narrow_file_panel, function()
+    resize_file_panel(-4)
+  end, "Narrow file tree")
+  map(active.file_buf, "n", keys.widen_file_panel, function()
+    resize_file_panel(4)
+  end, "Widen file tree")
   map(active.file_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.file_buf, "n", keys.refresh, refresh, "Refresh review")
   map(active.file_buf, "n", keys.close, close, "Close review")
@@ -1181,6 +1234,13 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.diff_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.diff_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
+  map(active.diff_buf, "n", keys.toggle_file_panel, toggle_file_panel, "Toggle file tree")
+  map(active.diff_buf, "n", keys.narrow_file_panel, function()
+    resize_file_panel(-4)
+  end, "Narrow file tree")
+  map(active.diff_buf, "n", keys.widen_file_panel, function()
+    resize_file_panel(4)
+  end, "Widen file tree")
   map(active.diff_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.diff_buf, "n", keys.next_hunk, function()
     jump_hunk(1)
@@ -1261,24 +1321,21 @@ function M.open(opts)
     session_path = session_path,
     tab = vim.api.nvim_get_current_tabpage(),
     file_win = file_win,
+    file_panel_width = config.options.file_panel_width,
     file_buf = file_buf,
     diff_win = diff_win,
     diff_buf = diff_buf,
   }
 
   vim.bo[file_buf].buftype = "nofile"
-  vim.bo[file_buf].bufhidden = "wipe"
+  vim.bo[file_buf].bufhidden = "hide"
   vim.bo[file_buf].swapfile = false
   vim.bo[file_buf].filetype = "ai-review-files"
   vim.bo[diff_buf].buftype = "nofile"
   vim.bo[diff_buf].bufhidden = "wipe"
   vim.bo[diff_buf].swapfile = false
-  vim.wo[file_win].number = false
-  vim.wo[file_win].relativenumber = false
-  vim.wo[file_win].signcolumn = "no"
-  vim.wo[file_win].cursorline = true
+  configure_file_window(file_win)
   vim.wo[file_win].winbar = " AI Review │ Changed files "
-  vim.wo[file_win].statusline = " ? Help   f All files   b Commit   B Range   Enter Open "
   vim.wo[diff_win].wrap = false
   vim.wo[diff_win].cursorline = true
   vim.wo[diff_win].statusline = " ? Help   c Comment   V…c Range   y Copy   A Archive   H History   q Close "
