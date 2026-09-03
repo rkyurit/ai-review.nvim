@@ -43,6 +43,41 @@ function M.files(opts)
   return true
 end
 
+function M.file_list(opts)
+  local picker = snacks_picker()
+  if not picker or type(picker.pick) ~= "function" then
+    return false
+  end
+  local items = vim.tbl_map(function(path)
+    return { text = path, file = path, cwd = opts.cwd }
+  end, opts.paths)
+  picker.pick({
+    title = opts.title or "Files",
+    cwd = opts.cwd,
+    items = items,
+    format = "file",
+    formatters = { file = { filename_first = true } },
+    preview = function(ctx)
+      if not opts.preview then
+        picker.preview.file(ctx)
+        return
+      end
+      local ok, contents, filetype = pcall(opts.preview, ctx.item.file)
+      if not ok then
+        ctx.preview:notify(tostring(contents), "error")
+        return
+      end
+      ctx.preview:reset()
+      ctx.preview:set_title(vim.fn.fnamemodify(ctx.item.file, ":t"))
+      vim.bo[ctx.buf].buftype = "nofile"
+      vim.bo[ctx.buf].filetype = filetype or vim.filetype.match({ filename = ctx.item.file }) or ""
+      ctx.preview:set_lines(vim.split(contents, "\n", { plain = true }))
+    end,
+    confirm = confirm(opts.on_select),
+  })
+  return true
+end
+
 function M.grep(opts)
   local picker = snacks_picker()
   if not picker or type(picker.grep) ~= "function" then

@@ -18,6 +18,7 @@ end
 
 local picked_file
 local picked_position
+local picked_filtered_file
 local closed_picker = false
 _G.Snacks = {
   picker = {
@@ -32,6 +33,11 @@ _G.Snacks = {
       opts.confirm({
         close = function() end,
       }, { file = "tracked.txt", pos = { 3, 4 } })
+    end,
+    pick = function(opts)
+      equal("file", opts.format, "filtered files should use Snacks file formatting")
+      assert(type(opts.preview) == "function", "filtered files should provide a preview")
+      opts.confirm({ close = function() end }, opts.items[1])
     end,
   },
 }
@@ -54,11 +60,25 @@ assert(
   }),
   "Snacks grep picker was not used"
 )
+assert(
+  picker.file_list({
+    cwd = root,
+    paths = { "tracked.txt" },
+    preview = function()
+      return "preview", "text"
+    end,
+    on_select = function(path)
+      picked_filtered_file = path
+    end,
+  }),
+  "Snacks filtered file picker was not used"
+)
 vim.wait(100, function()
-  return picked_file ~= nil and picked_position ~= nil
+  return picked_file ~= nil and picked_position ~= nil and picked_filtered_file ~= nil
 end)
 equal("src/plain.lua", picked_file, "Snacks file selection")
 equal({ "tracked.txt", { 3, 4 } }, picked_position, "Snacks grep selection")
+equal("tracked.txt", picked_filtered_file, "Snacks filtered file selection")
 assert(closed_picker, "Snacks picker should close before selection")
 _G.Snacks = nil
 assert(not picker.available(), "missing Snacks picker should be detected")

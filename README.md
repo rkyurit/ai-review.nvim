@@ -121,7 +121,7 @@ Content-search results open in diff view when the selected file belongs to the c
 
 No extra dependency is required. When [Snacks.nvim](https://github.com/folke/snacks.nvim) is available, all-files search in the working tree and working-tree text search use its native picker, including preview and the layout configured by LazyVim. `Alt-i` toggles ignored files, `Alt-h` toggles hidden files, and `Alt-m` maximizes the picker. Changed-only search, commit/range search, and selective `include_ignored` search keep the plugin's Git-aware fallback so their meaning stays exact.
 
-Other lists continue through `vim.ui.select`, which LazyVim already renders with Snacks. Keyboard help opens which-key when available and falls back to the built-in guide otherwise. Clipboard copying uses Neovim's standard provider first outside WSL, with platform fallbacks where needed.
+Changed-file, commit, range, and pull-request file searches also use a custom Snacks file picker, with the filename shown first and an exact diff/source preview for the selected review target. Other lists continue through `vim.ui.select`, which LazyVim already renders with Snacks. Keyboard help opens which-key when available and falls back to the built-in guide otherwise. Clipboard copying uses Neovim's standard provider first outside WSL, with platform fallbacks where needed.
 
 ## Commands
 

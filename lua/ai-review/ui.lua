@@ -763,6 +763,41 @@ local function search_files()
     notify("No files to search")
     return
   end
+  local picker = require("ai-review.picker")
+  if picker.file_list({
+    cwd = active.root,
+    paths = paths,
+    title = active.changed_only and "Search changed files" or "Search all files",
+    preview = function(path)
+      local changed = active.changed_by_path[path]
+      if changed then
+        local parsed = git.diff(active.root, changed, config.options.context_lines, active.target)
+        return table.concat(vim.tbl_map(function(entry)
+          return entry.text
+        end, parsed.lines), "\n"), "diff"
+      end
+      return git.read_file(active.root, path, active.target), vim.filetype.match({ filename = path }) or ""
+    end,
+    on_select = function(path)
+      if not active then
+        return
+      end
+      if not vim.tbl_contains(active.all_files, path) then
+        active.all_files[#active.all_files + 1] = path
+        table.sort(active.all_files)
+      end
+      active.expanded = tree.expand_for_paths({ path })
+      render_files()
+      for index, node in ipairs(active.visible_nodes) do
+        if node.type == "file" and node.path == path then
+          select_file(index)
+          break
+        end
+      end
+    end,
+  }) then
+    return
+  end
   vim.ui.select(paths, {
     prompt = active.changed_only and "Search changed files" or "Search all files",
     format_item = function(path)

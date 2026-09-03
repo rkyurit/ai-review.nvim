@@ -121,7 +121,7 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 
 追加の依存関係はありません。[Snacks.nvim](https://github.com/folke/snacks.nvim) が使える場合、作業ツリーの全ファイル検索と全文検索にはSnacks標準pickerを使い、プレビューやLazyVim側で設定したレイアウトもそのまま利用します。picker内では `Alt-i` でignore対象、`Alt-h` で隠しファイル、`Alt-m` で最大化を切り替えられます。変更ファイルのみの検索、コミット／範囲の検索、`include_ignored` の選択的な例外を含む検索は、意味を正確に保つためプラグイン側のGit検索を使います。
 
-その他の一覧は引き続き `vim.ui.select` を通すため、LazyVimではSnacks表示になります。操作ヘルプはwhich-keyがあればそれを開き、なければ内蔵ガイドへ戻ります。クリップボードはWSL以外ではNeovim標準providerを優先し、必要に応じてOS別の代替手段を使います。
+変更ファイル、コミット、範囲、PRのファイル検索にもSnacksのカスタムファイルpickerを使い、ファイル名を先頭に表示しつつ、選択中のレビュー対象に正確な差分／ソースをプレビューします。その他の一覧は引き続き `vim.ui.select` を通すため、LazyVimではSnacks表示になります。操作ヘルプはwhich-keyがあればそれを開き、なければ内蔵ガイドへ戻ります。クリップボードはWSL以外ではNeovim標準providerを優先し、必要に応じてOS別の代替手段を使います。
 
 ## コマンド
 
