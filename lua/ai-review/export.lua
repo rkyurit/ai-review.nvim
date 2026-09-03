@@ -1,3 +1,5 @@
+local config = require("ai-review.config")
+
 local M = {}
 
 local function location(comment)
@@ -10,11 +12,9 @@ end
 
 function M.markdown(session, target)
   local lines = {
-    "# AI code review feedback",
-    "",
     "Review target: " .. (target and target.label or "Working tree"),
     "",
-    "Apply only the requested changes below. Preserve unrelated code and report how each comment was addressed.",
+    config.options.export_instructions,
     "",
   }
   local count = 0
@@ -39,7 +39,7 @@ function M.markdown(session, target)
     end
   end
   if count == 0 then
-    return "# AI code review feedback\n\nNo unresolved comments.\n"
+    return "No unresolved comments.\n"
   end
   return table.concat(lines, "\n")
 end

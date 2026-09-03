@@ -142,6 +142,7 @@ require("ai-review").setup({
   history_panel_width = 60,
   context_lines = 3,
   export_to_clipboard = true,
+  -- export_instructions = "AIへ渡す独自の先頭指示。",
   changed_only = true,
   include_ignored = {},
   keymaps = {

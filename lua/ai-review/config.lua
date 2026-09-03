@@ -6,6 +6,13 @@ M.defaults = {
   history_panel_width = 60,
   context_lines = 3,
   export_to_clipboard = true,
+  export_instructions = table.concat({
+    "Review each numbered comment according to its intent.",
+    "- If a comment asks a question, answer it and do not change the code unless it explicitly requests a change.",
+    "- If a comment explicitly requests a change, implement it.",
+    "- If the intent is ambiguous, explain your interpretation or ask for clarification instead of changing the code.",
+    "Preserve unrelated code and report the outcome for each numbered comment.",
+  }, "\n"),
   changed_only = true,
   include_ignored = {},
   highlights = {

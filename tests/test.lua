@@ -260,6 +260,8 @@ equal("Keep the original wording.", restored.comments[1].body, "saved comment")
 local markdown = export.markdown(restored)
 assert(markdown:find("tracked.txt:1", 1, true), "export is missing location")
 assert(markdown:find("Keep the original wording.", 1, true), "export is missing comment")
+assert(markdown:find("If a comment asks a question", 1, true), "export is missing question guidance")
+assert(not markdown:find("# AI code review feedback", 1, true), "export still contains the redundant title")
 
 require("ai-review").open({ cwd = root })
 assert(#vim.api.nvim_list_tabpages() == 2, "review tab was not created")

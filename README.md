@@ -142,6 +142,7 @@ require("ai-review").setup({
   history_panel_width = 60,
   context_lines = 3,
   export_to_clipboard = true,
+  -- export_instructions = "Your custom instructions for the AI.",
   changed_only = true,
   include_ignored = {},
   keymaps = {
