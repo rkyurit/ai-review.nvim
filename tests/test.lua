@@ -117,6 +117,28 @@ local commit_search = git.search(root, "one", base)
 equal("history.txt", commit_search[1].path, "commit text search path")
 equal(1, commit_search[1].line, "commit text search line")
 
+local branches = git.branches(root)
+assert(vim.iter(branches):any(function(branch)
+  return branch.name == "review-base"
+end), "base branch is missing")
+assert(vim.iter(branches):any(function(branch)
+  return branch.name == "review-head"
+end), "head branch is missing")
+local pull_request = {
+  kind = "pull_request",
+  base = "review-base",
+  head = "review-head",
+}
+local pull_request_files = git.changed_files(root, pull_request)
+equal("history.txt", pull_request_files[1].path, "PR changed path")
+local pull_request_diff = git.diff(root, pull_request_files[1], 3, pull_request)
+assert(vim.iter(pull_request_diff.lines):any(function(line)
+  return line.text == "+two"
+end), "PR diff is missing new content")
+equal("two\n", git.read_file(root, "history.txt", pull_request), "PR head source content")
+local pull_request_search = git.search(root, "two", pull_request)
+equal("history.txt", pull_request_search[1].path, "PR text search path")
+
 local repo_files = git.repo_files(root)
 assert(not vim.tbl_contains(repo_files, "ignored/"), "ignored directory should be hidden by default")
 repo_files = git.repo_files(root, nil, { "ignored/" })

@@ -965,6 +965,43 @@ local function select_range()
   end)
 end
 
+local function branch_label(branch)
+  return ("%s  (%s)"):format(branch.name, branch.commit)
+end
+
+local function select_pull_request()
+  local branches = git.branches(active.root)
+  if #branches < 2 then
+    notify("At least two local or remote branches are required", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.select(branches, {
+    prompt = "PR base branch",
+    format_item = branch_label,
+  }, function(base)
+    if not base or not active then
+      return
+    end
+    local heads = vim.tbl_filter(function(branch)
+      return branch.name ~= base.name
+    end, branches)
+    vim.ui.select(heads, {
+      prompt = "PR head branch",
+      format_item = branch_label,
+    }, function(head)
+      if head and active then
+        apply_target({
+          kind = "pull_request",
+          id = "pull-request:" .. base.name .. "..." .. head.name,
+          label = base.name .. "..." .. head.name,
+          base = base.name,
+          head = head.name,
+        })
+      end
+    end)
+  end)
+end
+
 local function toggle_files()
   active.changed_only = not active.changed_only
   if active.changed_only then
@@ -1043,6 +1080,7 @@ local function show_help()
     guide(keys.search_content, "Search repository text"),
     guide(keys.select_target, "Working tree / single commit"),
     guide(keys.select_range, "Select a commit range"),
+    guide(keys.select_pull_request, "Review a branch / PR comparison"),
     guide(keys.toggle_view, "Diff / regular source view"),
     guide(keys.refresh, "Refresh"),
     "",
@@ -1119,6 +1157,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.history, show_history, "Open review history")
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
+  map(active.file_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
   map(active.file_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.file_buf, "n", keys.refresh, refresh, "Refresh review")
   map(active.file_buf, "n", keys.close, close, "Close review")
@@ -1137,6 +1176,7 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.toggle_files, toggle_files, "Toggle changed/all files")
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.diff_buf, "n", keys.select_range, select_range, "Select commit range")
+  map(active.diff_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
   map(active.diff_buf, "n", keys.help, show_help, "Show keyboard help")
   map(active.diff_buf, "n", keys.next_hunk, function()
     jump_hunk(1)

@@ -95,6 +95,7 @@ Archived comments never mix into the active review. In the history pane, press `
 | `<localleader>t` | Toggle changed files / all files |
 | `<localleader>f` / `<localleader>g` | Search file names / file contents |
 | `<localleader>b` / `<localleader>B` | Select one target / a commit range |
+| `<localleader>p` | Review a branch comparison like a pull request |
 | `<localleader>v` | Toggle diff / source view |
 | `<localleader>c` | Comment on the current line |
 | Visual selection, then `<localleader>c` | Comment on a range |
@@ -155,7 +156,9 @@ The plugin uses its own highlight groups and does not replace the active colorsc
 
 ## Storage and scope
 
-Comments and archives are JSON files under `storage_dir`, scoped by repository and branch. Comments are also scoped to the selected working-tree, commit, or range target.
+Comments and archives are JSON files under `storage_dir`, scoped by repository and branch. Comments are also scoped to the selected working-tree, commit, range, or pull-request-style branch target.
+
+Branch comparison uses Git's three-dot form (`base...head`), matching the usual pull-request view from the branches' merge base. Both local and already-fetched remote branches are available, and neither branch needs to be checked out.
 
 The plugin does not modify project files unless you explicitly export to a path inside the repository.
 

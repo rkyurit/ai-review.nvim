@@ -22,6 +22,8 @@ git -C "$fixture" commit -qm "base fixture"
 printf '%s\n' 'two' > "$fixture/history.txt"
 git -C "$fixture" add history.txt
 git -C "$fixture" commit -qm "second fixture"
+git -C "$fixture" branch review-head
+git -C "$fixture" branch review-base HEAD~1
 
 printf '%s\n' 'after' > "$fixture/tracked.txt"
 rm "$fixture/deleted.txt"

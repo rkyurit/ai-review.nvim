@@ -48,6 +48,8 @@ local function name_status(root, target)
     )
   elseif target_kind(target) == "range" then
     return run({ "git", "diff", "--name-status", "-z", "--find-renames", target.base, target.target, "--" }, root)
+  elseif target_kind(target) == "pull_request" then
+    return run({ "git", "diff", "--name-status", "-z", "--find-renames", target.base .. "..." .. target.head, "--" }, root)
   end
   if not has_head(root) then
     return ""
@@ -172,6 +174,18 @@ function M.diff(root, file, context_lines, target)
       "--",
       file.path,
     }
+  elseif target_kind(target) == "pull_request" then
+    args = {
+      "git",
+      "diff",
+      "--no-ext-diff",
+      "--no-color",
+      "--find-renames",
+      "--unified=" .. context_lines,
+      target.base .. "..." .. target.head,
+      "--",
+      file.path,
+    }
   elseif file.status == "?" then
     args = {
       "git",
@@ -215,6 +229,24 @@ function M.commits(root, limit)
   return commits
 end
 
+function M.branches(root)
+  local out = run({
+    "git",
+    "for-each-ref",
+    "--format=%(refname:short)%00%(objectname:short)",
+    "refs/heads",
+    "refs/remotes",
+  }, root)
+  local branches = {}
+  for line in out:gmatch("[^\r\n]+") do
+    local name, commit = line:match("^(.-)%z(.+)$")
+    if name and not name:match("/HEAD$") then
+      branches[#branches + 1] = { name = name, commit = commit }
+    end
+  end
+  return branches
+end
+
 local function included_ignored_paths(root, patterns)
   local paths = {}
   local seen = {}
@@ -244,6 +276,8 @@ function M.repo_files(root, target, include_ignored)
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.commit }, root)
   elseif target_kind(target) == "range" then
     out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.target }, root)
+  elseif target_kind(target) == "pull_request" then
+    out = run({ "git", "ls-tree", "-r", "--name-only", "-z", target.head }, root)
   else
     out = run({ "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, root)
     extras = included_ignored_paths(root, include_ignored)
@@ -322,6 +356,8 @@ function M.search(root, query, target, include_ignored)
     revision = target.commit
   elseif target_kind(target) == "range" then
     revision = target.target
+  elseif target_kind(target) == "pull_request" then
+    revision = target.head
   else
     args[#args + 1] = "--untracked"
     args[#args + 1] = "--exclude-standard"
@@ -370,6 +406,8 @@ function M.read_file(root, path, target)
     return run({ "git", "show", target.commit .. ":" .. path }, root)
   elseif target_kind(target) == "range" then
     return run({ "git", "show", target.target .. ":" .. path }, root)
+  elseif target_kind(target) == "pull_request" then
+    return run({ "git", "show", target.head .. ":" .. path }, root)
   end
   local file = assert(io.open(vim.fs.joinpath(root, path), "rb"))
   local contents = file:read("*a")

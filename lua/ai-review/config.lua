@@ -39,6 +39,7 @@ M.defaults = {
     toggle_view = "<localleader>v",
     select_target = "<localleader>b",
     select_range = "<localleader>B",
+    select_pull_request = "<localleader>p",
     collapse = "h",
     expand = "l",
     next_hunk = "]h",
