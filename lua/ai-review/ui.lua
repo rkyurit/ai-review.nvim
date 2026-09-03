@@ -283,9 +283,13 @@ local function render_diff(keep_cursor)
     key_label(config.options.keymaps.help)
   )
   render_comments()
-  if keep_cursor and valid_window(active.diff_win) then
-    old_cursor[1] = math.min(old_cursor[1], math.max(1, #lines))
-    vim.api.nvim_win_set_cursor(active.diff_win, old_cursor)
+  if valid_window(active.diff_win) then
+    if keep_cursor then
+      old_cursor[1] = math.min(old_cursor[1], math.max(1, #lines))
+      vim.api.nvim_win_set_cursor(active.diff_win, old_cursor)
+    else
+      vim.api.nvim_win_set_cursor(active.diff_win, { 1, 0 })
+    end
   end
 end
 

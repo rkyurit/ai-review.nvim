@@ -363,10 +363,13 @@ for row, line in ipairs(file_lines) do
   end
 end
 assert(source_row, "source file is missing from file tree")
+local diff_win = vim.fn.bufwinid(diff_buf)
+vim.api.nvim_win_set_cursor(diff_win, { vim.api.nvim_buf_line_count(diff_buf), 0 })
 vim.api.nvim_set_current_win(file_win)
 vim.api.nvim_win_set_cursor(file_win, { source_row, 0 })
 vim.api.nvim_feedkeys(vim.keycode("<CR>"), "x", false)
 equal("lua", vim.bo[vim.api.nvim_get_current_buf()].filetype, "source filetype")
+equal(1, vim.api.nvim_win_get_cursor(0)[1], "newly opened file should start at the first line")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 vim.ui.input = function(_, callback)
   callback("Source file comment")
