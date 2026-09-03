@@ -328,6 +328,18 @@ for row, line in ipairs(diff_lines) do
 end
 assert(added_row, "no added line in review buffer")
 assert(deleted_row, "no deleted line in review buffer")
+vim.ui.input = function(_, callback)
+  callback("after")
+end
+vim.ui.select = function(items, _, callback)
+  callback(items[1])
+end
+vim.api.nvim_feedkeys(",g", "x", false)
+assert(
+  vim.wo[vim.fn.bufwinid(diff_buf)].winbar:find("│ diff │ tracked.txt", 1, true),
+  "changed grep result did not open as a diff"
+)
+equal(added_row, vim.api.nvim_win_get_cursor(vim.fn.bufwinid(diff_buf))[1], "grep result did not reach its diff line")
 local selection_start = math.min(added_row, deleted_row)
 local selection_end = math.max(added_row, deleted_row)
 vim.api.nvim_win_set_cursor(0, { selection_start, 0 })

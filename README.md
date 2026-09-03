@@ -115,6 +115,8 @@ Archived comments never mix into the active review. In the history pane, press `
 
 `<localleader>` defaults to `\` unless your Neovim configuration changes `maplocalleader`; press it as a sequence, not a simultaneous chord. Every key can be changed through `keymaps`.
 
+Content-search results open in diff view when the selected file belongs to the current review diff, and in source view otherwise. `<localleader>v` switches a changed file between those same diff and source views.
+
 ## Optional LazyVim integration
 
 No extra dependency is required. When [Snacks.nvim](https://github.com/folke/snacks.nvim) is available, all-files search in the working tree and working-tree text search use its native picker, including preview and the layout configured by LazyVim. `Alt-i` toggles ignored files, `Alt-h` toggles hidden files, and `Alt-m` maximizes the picker. Changed-only search, commit/range search, and selective `include_ignored` search keep the plugin's Git-aware fallback so their meaning stays exact.

@@ -788,6 +788,50 @@ local function search_files()
   end)
 end
 
+local function open_content_result(path, source_line, source_column)
+  path = vim.fs.normalize(path)
+  local root = vim.fs.normalize(active.root)
+  if path:sub(1, #root + 1) == root .. "/" then
+    path = path:sub(#root + 2)
+  end
+  local changed = active.changed_by_path[path]
+  if not changed then
+    active.changed_only = false
+  end
+  if not vim.tbl_contains(active.all_files, path) then
+    active.all_files[#active.all_files + 1] = path
+    table.sort(active.all_files)
+  end
+  active.selected_path = path
+  active.view_mode = changed and "diff" or "source"
+  active.expanded = tree.expand_for_paths({ path })
+  render_files()
+  render_diff(false)
+  vim.api.nvim_set_current_win(active.diff_win)
+
+  local row
+  local column = source_column or 0
+  if changed and active.parsed then
+    for index, entry in ipairs(active.parsed.lines) do
+      if entry.new_line == source_line then
+        row = index
+        column = column + 1
+        break
+      end
+    end
+  else
+    row = source_line
+  end
+  if row then
+    row = math.min(row, math.max(1, vim.api.nvim_buf_line_count(active.diff_buf)))
+    local line = vim.api.nvim_buf_get_lines(active.diff_buf, row - 1, row, false)[1] or ""
+    column = math.min(math.max(0, column), #line)
+    vim.api.nvim_win_set_cursor(active.diff_win, { row, column })
+  elseif changed then
+    notify("Match is outside the displayed diff context", vim.log.levels.INFO)
+  end
+end
+
 local function search_content()
   if active.target.kind == "working" and #config.options.include_ignored == 0 then
     local picker = require("ai-review.picker")
@@ -797,26 +841,7 @@ local function search_content()
         if not active then
           return
         end
-        path = vim.fs.normalize(path)
-        local root = vim.fs.normalize(active.root)
-        if path:sub(1, #root + 1) == root .. "/" then
-          path = path:sub(#root + 2)
-        end
-        active.changed_only = false
-        if not vim.tbl_contains(active.all_files, path) then
-          active.all_files[#active.all_files + 1] = path
-          table.sort(active.all_files)
-        end
-        active.selected_path = path
-        active.view_mode = "source"
-        active.expanded = tree.expand_for_paths({ path })
-        render_files()
-        render_diff(false)
-        vim.api.nvim_set_current_win(active.diff_win)
-        local row = math.min(pos and pos[1] or 1, math.max(1, vim.api.nvim_buf_line_count(active.diff_buf)))
-        local line = vim.api.nvim_buf_get_lines(active.diff_buf, row - 1, row, false)[1] or ""
-        local column = math.min(math.max(0, pos and pos[2] or 0), #line)
-        vim.api.nvim_win_set_cursor(active.diff_win, { row, column })
+        open_content_result(path, pos and pos[1] or 1, pos and pos[2] or 0)
       end,
     }) then
       return
@@ -844,21 +869,7 @@ local function search_content()
       if not choice or not active then
         return
       end
-      active.changed_only = false
-      if not vim.tbl_contains(active.all_files, choice.path) then
-        active.all_files[#active.all_files + 1] = choice.path
-        table.sort(active.all_files)
-      end
-      active.selected_path = choice.path
-      active.view_mode = "source"
-      active.expanded = tree.expand_for_paths({ choice.path })
-      render_files()
-      render_diff(false)
-      vim.api.nvim_set_current_win(active.diff_win)
-      local row = math.min(choice.line, math.max(1, vim.api.nvim_buf_line_count(active.diff_buf)))
-      local line = vim.api.nvim_buf_get_lines(active.diff_buf, row - 1, row, false)[1] or ""
-      local column = math.min(math.max(0, choice.column - 1), #line)
-      vim.api.nvim_win_set_cursor(active.diff_win, { row, column })
+      open_content_result(choice.path, choice.line, choice.column - 1)
     end)
   end)
 end
