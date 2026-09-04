@@ -585,8 +585,9 @@ local function open_history_entry(archive)
   vim.keymap.set("n", "q", close_history, { buffer = buf, silent = true })
   vim.keymap.set("n", "<Esc>", close_history, { buffer = buf, silent = true })
   vim.keymap.set("n", "y", function()
-    local copied, provider = clipboard.copy(archive.markdown or "")
-    notify(copied and ("Archived review copied with " .. provider) or "Archived review copied to unnamed register")
+    clipboard.copy_async(archive.markdown or "", function(copied, provider)
+      notify(copied and ("Archived review copied with " .. provider) or "Archived review copied to unnamed register")
+    end)
   end, { buffer = buf, silent = true })
 end
 
@@ -911,14 +912,14 @@ end
 
 local function export_comments()
   local markdown = export.markdown(active.session, active.target)
-  local copied = false
-  local provider
   if config.options.export_to_clipboard then
-    copied, provider = clipboard.copy(markdown)
+    clipboard.copy_async(markdown, function(copied, provider)
+      notify(copied and ("Review copied with " .. provider) or "Review copied to unnamed register")
+    end)
   else
     vim.fn.setreg('"', markdown)
+    notify("Review copied to unnamed register")
   end
-  notify(copied and ("Review copied with " .. provider) or "Review copied to unnamed register")
 end
 
 local function refresh()

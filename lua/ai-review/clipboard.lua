@@ -76,6 +76,50 @@ function M.copy(text)
   return false, "unnamed-register"
 end
 
+function M.copy_async(text, callback)
+  callback = callback or function() end
+  vim.fn.setreg('"', text)
+  local wsl = is_wsl()
+  local has_clipboard = vim.fn.has("clipboard") == 1
+
+  if not wsl and has_clipboard and pcall(vim.fn.setreg, "+", text) then
+    callback(true, "neovim")
+    return
+  end
+
+  local providers = vim.tbl_filter(function(provider)
+    return vim.fn.executable(provider.executable) == 1
+  end, command_providers(wsl))
+  local index = 0
+  local function finish(copied, provider)
+    vim.schedule(function()
+      callback(copied, provider)
+    end)
+  end
+  local function try_next()
+    index = index + 1
+    local provider = providers[index]
+    if not provider then
+      vim.schedule(function()
+        if wsl and has_clipboard and pcall(vim.fn.setreg, "+", text) then
+          callback(true, "neovim")
+        else
+          callback(false, "unnamed-register")
+        end
+      end)
+      return
+    end
+    vim.system(provider.command, { stdin = text }, function(result)
+      if result.code == 0 then
+        finish(true, provider.executable)
+      else
+        vim.schedule(try_next)
+      end
+    end)
+  end
+  try_next()
+end
+
 M._is_wsl = is_wsl
 M._command_providers = command_providers
 
