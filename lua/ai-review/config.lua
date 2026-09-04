@@ -14,6 +14,7 @@ M.defaults = {
     "Preserve unrelated code and report the outcome for each numbered comment.",
   }, "\n"),
   changed_only = true,
+  github_remote = "origin",
   include_ignored = {},
   highlights = {
     selection = { bg = "#37373d", bold = true },
@@ -47,6 +48,7 @@ M.defaults = {
     select_target = "<localleader>b",
     select_range = "<localleader>B",
     select_pull_request = "<localleader>p",
+    select_github_pull_request = "<localleader>P",
     toggle_file_panel = "<localleader>s",
     narrow_file_panel = "<localleader><",
     widen_file_panel = "<localleader>>",

@@ -136,6 +136,19 @@ assert(by_path["tracked.txt"], "modified file missing")
 
 local commits = git.commits(root, 10)
 equal(2, #commits, "commit count")
+local github_pr = assert(git._parse_github_pull_request(vim.json.encode({
+  number = 42,
+  title = "Review this change",
+  url = "https://github.com/example/repo/pull/42",
+  baseRefName = "main",
+  baseRefOid = "base-oid",
+  headRefName = "feature",
+  headRefOid = "head-oid",
+})))
+equal(42, github_pr.number, "GitHub PR number")
+equal("base-oid", github_pr.baseRefOid, "GitHub PR base OID")
+local invalid_pr, invalid_pr_error = git._parse_github_pull_request("{}")
+assert(not invalid_pr and invalid_pr_error:find("number", 1, true), "invalid GitHub PR data was accepted")
 local latest = { kind = "commit", commit = commits[1].hash }
 local base = { kind = "commit", commit = commits[2].hash }
 local commit_files = git.changed_files(root, latest)
@@ -332,6 +345,7 @@ for _, mapping in ipairs({
   { lhs = ",s", desc = "Toggle file tree" },
   { lhs = ",<lt>", desc = "Narrow file tree" },
   { lhs = ",>", desc = "Widen file tree" },
+  { lhs = ",P", desc = "Open GitHub PR" },
 }) do
   assert(vim.iter(diff_mappings):any(function(item)
     return item.lhs == mapping.lhs and item.desc == mapping.desc

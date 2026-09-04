@@ -98,6 +98,7 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 | `<localleader>f` / `<localleader>g` | ファイル名／ファイル内容を検索する |
 | `<localleader>b` / `<localleader>B` | 対象を1つ選ぶ／コミット範囲を選ぶ |
 | `<localleader>p` | PR相当のブランチ比較を開く |
+| `<localleader>P` | GitHubのPR番号を指定して開く |
 | `<localleader>v` | 差分表示／通常表示を切り替える |
 | `<localleader>c` | 現在行へコメントする |
 | Visual選択して `<localleader>c` | 選択範囲へコメントする |
@@ -146,6 +147,7 @@ require("ai-review").setup({
   export_to_clipboard = true,
   -- export_instructions = "AIへ渡す独自の先頭指示。",
   changed_only = true,
+  github_remote = "origin",
   include_ignored = {},
   keymaps = {
     search_files = "<localleader>f",
@@ -166,6 +168,8 @@ require("ai-review").setup({
 コメントと履歴は `storage_dir` 配下のJSONへ保存し、リポジトリとブランチごとに分離します。コメントは作業ツリー・単一コミット・コミット範囲・PR相当のブランチ比較ごとにも分かれます。
 
 ブランチ比較にはGitのthree-dot形式（`base...head`）を使い、通常のPRと同様にmerge baseから変更側ブランチまでを表示します。ローカルブランチと取得済みのリモートブランチを選択でき、どちらもcheckoutする必要はありません。
+
+[GitHub CLI](https://cli.github.com/) を導入・認証済みなら、`<localleader>P` でPR番号を入力できます。PRが実際に指しているbase/headのコミットIDを取得し、`github_remote`（デフォルトは `origin`）からPR専用refをfetchして、ブランチをcheckoutせずに比較します。古いローカルブランチに結果が左右されません。
 
 出力先をリポジトリ内に指定して `:AIReviewExport` を実行しない限り、プロジェクトのファイルを書き換えません。
 

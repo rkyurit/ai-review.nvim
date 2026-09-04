@@ -98,6 +98,7 @@ Archived comments never mix into the active review. In the history pane, press `
 | `<localleader>f` / `<localleader>g` | Search file names / file contents |
 | `<localleader>b` / `<localleader>B` | Select one target / a commit range |
 | `<localleader>p` | Review a branch comparison like a pull request |
+| `<localleader>P` | Open a GitHub pull request by number |
 | `<localleader>v` | Toggle diff / source view |
 | `<localleader>c` | Comment on the current line |
 | Visual selection, then `<localleader>c` | Comment on a range |
@@ -146,6 +147,7 @@ require("ai-review").setup({
   export_to_clipboard = true,
   -- export_instructions = "Your custom instructions for the AI.",
   changed_only = true,
+  github_remote = "origin",
   include_ignored = {},
   keymaps = {
     search_files = "<localleader>f",
@@ -166,6 +168,8 @@ The plugin uses its own highlight groups and does not replace the active colorsc
 Comments and archives are JSON files under `storage_dir`, scoped by repository and branch. Comments are also scoped to the selected working-tree, commit, range, or pull-request-style branch target.
 
 Branch comparison uses Git's three-dot form (`base...head`), matching the usual pull-request view from the branches' merge base. Both local and already-fetched remote branches are available, and neither branch needs to be checked out.
+
+With an installed and authenticated [GitHub CLI](https://cli.github.com/), `<localleader>P` accepts a PR number, reads its exact base/head commit IDs, fetches the PR refs from `github_remote` (default: `origin`), and opens the comparison without checking out either branch. This avoids stale local branches affecting the result.
 
 The plugin does not modify project files unless you explicitly export to a path inside the repository.
 

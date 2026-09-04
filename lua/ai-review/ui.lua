@@ -1074,6 +1074,39 @@ local function select_pull_request()
   end)
 end
 
+local function select_github_pull_request()
+  vim.ui.input({ prompt = "GitHub PR number: " }, function(value)
+    if not value or not active then
+      return
+    end
+    local number = tonumber(vim.trim(value))
+    if not number or number < 1 or number % 1 ~= 0 then
+      notify("Enter a valid GitHub PR number", vim.log.levels.ERROR)
+      return
+    end
+    notify("Loading GitHub PR #" .. number .. "…")
+    git.github_pull_request(active.root, number, config.options.github_remote, function(pr, err)
+      if not active then
+        return
+      end
+      if not pr then
+        notify(err, vim.log.levels.ERROR)
+        return
+      end
+      apply_target({
+        kind = "pull_request",
+        id = "github-pr:" .. (pr.url or tostring(pr.number)),
+        label = ("PR #%d — %s"):format(pr.number, pr.title),
+        base = pr.baseRefOid,
+        head = pr.headRefOid,
+        base_name = pr.baseRefName,
+        head_name = pr.headRefName,
+        url = pr.url,
+      })
+    end)
+  end)
+end
+
 local function toggle_files()
   active.changed_only = not active.changed_only
   if active.changed_only then
@@ -1195,6 +1228,7 @@ local function show_help()
     guide(keys.select_target, "Working tree / single commit"),
     guide(keys.select_range, "Select a commit range"),
     guide(keys.select_pull_request, "Review a branch / PR comparison"),
+    guide(keys.select_github_pull_request, "Review a GitHub PR number"),
     guide(keys.toggle_view, "Diff / regular source view"),
     guide(keys.refresh, "Refresh"),
     "",
@@ -1276,6 +1310,7 @@ local function install_keymaps()
   map(active.file_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.file_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.file_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
+  map(active.file_buf, "n", keys.select_github_pull_request, select_github_pull_request, "Open GitHub PR")
   map(active.file_buf, "n", keys.toggle_file_panel, toggle_file_panel, "Toggle file tree")
   map(active.file_buf, "n", keys.narrow_file_panel, function()
     resize_file_panel(-4)
@@ -1302,6 +1337,7 @@ local function install_keymaps()
   map(active.diff_buf, "n", keys.select_target, select_target, "Select review target")
   map(active.diff_buf, "n", keys.select_range, select_range, "Select commit range")
   map(active.diff_buf, "n", keys.select_pull_request, select_pull_request, "Select PR branches")
+  map(active.diff_buf, "n", keys.select_github_pull_request, select_github_pull_request, "Open GitHub PR")
   map(active.diff_buf, "n", keys.toggle_file_panel, toggle_file_panel, "Toggle file tree")
   map(active.diff_buf, "n", keys.narrow_file_panel, function()
     resize_file_panel(-4)

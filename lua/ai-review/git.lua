@@ -247,6 +247,67 @@ function M.branches(root)
   return branches
 end
 
+local function parse_github_pull_request(output)
+  local ok, data = pcall(vim.json.decode, output)
+  if not ok or type(data) ~= "table" then
+    return nil, "GitHub CLI returned invalid PR data"
+  end
+  for _, field in ipairs({ "number", "title", "baseRefName", "baseRefOid", "headRefName", "headRefOid" }) do
+    if data[field] == nil or data[field] == "" then
+      return nil, "GitHub PR data is missing " .. field
+    end
+  end
+  return data
+end
+
+function M.github_pull_request(root, number, remote, callback)
+  if vim.fn.executable("gh") ~= 1 then
+    callback(nil, "GitHub CLI (gh) is not installed")
+    return
+  end
+  vim.system({
+    "gh",
+    "pr",
+    "view",
+    tostring(number),
+    "--json",
+    "number,title,url,baseRefName,baseRefOid,headRefName,headRefOid",
+  }, { cwd = root, text = true }, function(result)
+    vim.schedule(function()
+      if result.code ~= 0 then
+        callback(nil, vim.trim(result.stderr or "Could not read the GitHub PR"))
+        return
+      end
+      local data, parse_error = parse_github_pull_request(result.stdout or "")
+      if not data then
+        callback(nil, parse_error)
+        return
+      end
+      local prefix = "refs/ai-review/pull/" .. data.number
+      local fetch = {
+        "git",
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        remote or "origin",
+        "+refs/heads/" .. data.baseRefName .. ":" .. prefix .. "/base",
+        "+refs/pull/" .. data.number .. "/head:" .. prefix .. "/head",
+      }
+      vim.system(fetch, { cwd = root, text = true }, function(fetch_result)
+        vim.schedule(function()
+          if fetch_result.code ~= 0 then
+            callback(nil, vim.trim(fetch_result.stderr or "Could not fetch the GitHub PR"))
+            return
+          end
+          callback(data)
+        end)
+      end)
+    end)
+  end)
+end
+
+M._parse_github_pull_request = parse_github_pull_request
+
 local function included_ignored_paths(root, patterns)
   local paths = {}
   local seen = {}
