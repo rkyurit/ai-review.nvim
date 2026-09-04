@@ -117,6 +117,8 @@ Gitでignoreされているパスは初期状態では表示しません。必�
 
 全文検索の結果は、現在のレビュー対象で変更されたファイルなら差分表示、変更されていなければ通常表示で開きます。変更ファイルでは `<localleader>v` により、同じ差分表示と通常表示を切り替えられます。
 
+コメント検索もファイル検索と同じSnacks形式で、ファイル名を先頭、その横にコメント本文、右側に現在のレビュー対象に対応した差分／ソースのプレビューを表示します。
+
 ## LazyVimとの連携（任意）
 
 追加の依存関係はありません。[Snacks.nvim](https://github.com/folke/snacks.nvim) が使える場合、作業ツリーの全ファイル検索と全文検索にはSnacks標準pickerを使い、プレビューやLazyVim側で設定したレイアウトもそのまま利用します。picker内では `Alt-i` でignore対象、`Alt-h` で隠しファイル、`Alt-m` で最大化を切り替えられます。変更ファイルのみの検索、コミット／範囲の検索、`include_ignored` の選択的な例外を含む検索は、意味を正確に保つためプラグイン側のGit検索を使います。
@@ -169,7 +171,7 @@ require("ai-review").setup({
 
 ## WSLのクリップボード
 
-コピー時は常にNeovimの無名レジスタへ書き込みます。WezTerm内では、別プロセスを起動せず実際のシステムクリップボードを更新できるOSC 52を最優先します。それ以外のWSL端末では `win32yank.exe` を優先し、次にUTF-8入力を明示したWindows PowerShellを使います。日本語などが文字化けするため、UTF-8テキストを `clip.exe` へ直接送りません。そのほか、Neovimのクリップボードプロバイダ、`wl-copy`、`xclip`、macOSの `pbcopy` に対応しています。
+コピー時は常にNeovimの無名レジスタへ書き込みます。WSLでは本文をUTF-16LEへ変換して `clip.exe` へ直接渡し、日本語の文字化けとPowerShellの起動待ちを両方避けます。利用できない場合はWezTermのOSC 52、`win32yank.exe`、UTF-8入力を明示したWindows PowerShellの順にフォールバックします。そのほか、Neovimのクリップボードプロバイダ、`wl-copy`、`xclip`、macOSの `pbcopy` に対応しています。
 
 外部クリップボード処理は非同期で実行するため、WSLのPowerShellなどが起動する間も `<localleader>y` でエディタを停止させません。
 

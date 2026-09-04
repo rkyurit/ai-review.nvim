@@ -17,6 +17,7 @@ local function command_providers(wsl)
   local providers = {}
   if wsl then
     providers = {
+      { executable = "clip.exe", command = { "clip.exe" }, encoding = "utf-16le" },
       { executable = "win32yank.exe", command = { "win32yank.exe", "-i", "--crlf" } },
       {
         executable = "powershell.exe",
@@ -51,6 +52,13 @@ local function command_providers(wsl)
   return providers
 end
 
+local function provider_input(provider, text)
+  if provider.encoding == "utf-16le" then
+    return vim.iconv(text, "utf-8", "utf-16le")
+  end
+  return text
+end
+
 local function copy_with_osc52(text)
   local wezterm = vim.env.WEZTERM_PANE or (vim.env.TERM_PROGRAM or ""):lower() == "wezterm"
   if not wezterm or vim.env.TMUX then
@@ -65,10 +73,10 @@ end
 
 function M.copy(text)
   vim.fn.setreg('"', text)
-  if copy_with_osc52(text) then
+  local wsl = is_wsl()
+  if (not wsl or vim.fn.executable("clip.exe") ~= 1) and copy_with_osc52(text) then
     return true, "osc52"
   end
-  local wsl = is_wsl()
 
   -- WSL clipboard providers must be chosen explicitly. Neovim can otherwise
   -- fall back to clip.exe, which corrupts UTF-8 text such as Japanese.
@@ -78,7 +86,7 @@ function M.copy(text)
 
   for _, provider in ipairs(command_providers(wsl)) do
     if vim.fn.executable(provider.executable) == 1 then
-      local result = vim.system(provider.command, { stdin = text }):wait()
+      local result = vim.system(provider.command, { stdin = provider_input(provider, text) }):wait()
       if result.code == 0 then
         return true, provider.executable
       end
@@ -94,11 +102,11 @@ end
 function M.copy_async(text, callback)
   callback = callback or function() end
   vim.fn.setreg('"', text)
-  if copy_with_osc52(text) then
+  local wsl = is_wsl()
+  if (not wsl or vim.fn.executable("clip.exe") ~= 1) and copy_with_osc52(text) then
     callback(true, "osc52")
     return
   end
-  local wsl = is_wsl()
   local has_clipboard = vim.fn.has("clipboard") == 1
 
   if not wsl and has_clipboard and pcall(vim.fn.setreg, "+", text) then
@@ -128,7 +136,7 @@ function M.copy_async(text, callback)
       end)
       return
     end
-    vim.system(provider.command, { stdin = text }, function(result)
+    vim.system(provider.command, { stdin = provider_input(provider, text) }, function(result)
       if result.code == 0 then
         finish(true, provider.executable)
       else
@@ -142,5 +150,6 @@ end
 M._is_wsl = is_wsl
 M._command_providers = command_providers
 M._copy_with_osc52 = copy_with_osc52
+M._provider_input = provider_input
 
 return M

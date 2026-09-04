@@ -662,6 +662,47 @@ local function comment_rows()
   return rows
 end
 
+local function open_comment(choice)
+  if not choice or not active then
+    return
+  end
+  if not active.changed_by_path[choice.path] then
+    active.changed_only = false
+  end
+  active.selected_path = choice.path
+  active.view_mode = active.changed_by_path[choice.path] and "diff" or "source"
+  if not active.changed_only then
+    if not vim.tbl_contains(active.all_files, choice.path) then
+      active.all_files[#active.all_files + 1] = choice.path
+      table.sort(active.all_files)
+    end
+    active.expanded = tree.expand_for_paths({ choice.path })
+    render_files()
+  end
+  render_diff(false)
+  vim.api.nvim_set_current_win(active.diff_win)
+  local target_row = 1
+  for row, entry in ipairs(active.parsed.lines) do
+    local side, line = comment_line(entry)
+    if side == choice.side and line == choice.start_line then
+      target_row = row
+      break
+    end
+  end
+  vim.api.nvim_win_set_cursor(active.diff_win, { target_row, 0 })
+end
+
+local function preview_path(path)
+  local changed = active.changed_by_path[path]
+  if changed then
+    local parsed = git.diff(active.root, changed, config.options.context_lines, active.target)
+    return table.concat(vim.tbl_map(function(entry)
+      return entry.text
+    end, parsed.lines), "\n"), "diff"
+  end
+  return git.read_file(active.root, path, active.target), vim.filetype.match({ filename = path }) or ""
+end
+
 local function show_comments()
   local items = {}
   for _, comment in ipairs(active.session.comments) do
@@ -673,40 +714,23 @@ local function show_comments()
     notify("No review comments")
     return
   end
+  local picker = require("ai-review.picker")
+  if picker.comment_list({
+    cwd = active.root,
+    comments = items,
+    preview = function(comment)
+      return preview_path(comment.path)
+    end,
+    on_select = open_comment,
+  }) then
+    return
+  end
   vim.ui.select(items, {
     prompt = "Review comments",
     format_item = function(item)
       return ("%s:%d  %s"):format(item.path, item.start_line, item.body)
     end,
-  }, function(choice)
-    if not choice or not active then
-      return
-    end
-    if not active.changed_by_path[choice.path] then
-      active.changed_only = false
-    end
-    active.selected_path = choice.path
-    active.view_mode = active.changed_by_path[choice.path] and "diff" or "source"
-    if not active.changed_only then
-      if not vim.tbl_contains(active.all_files, choice.path) then
-        active.all_files[#active.all_files + 1] = choice.path
-        table.sort(active.all_files)
-      end
-      active.expanded = tree.expand_for_paths({ choice.path })
-      render_files()
-    end
-    render_diff(false)
-    vim.api.nvim_set_current_win(active.diff_win)
-    local target_row = 1
-    for row, entry in ipairs(active.parsed.lines) do
-      local side, line = comment_line(entry)
-      if side == choice.side and line == choice.start_line then
-        target_row = row
-        break
-      end
-    end
-    vim.api.nvim_win_set_cursor(active.diff_win, { target_row, 0 })
-  end)
+  }, open_comment)
 end
 
 local function search_files()
@@ -769,16 +793,7 @@ local function search_files()
     cwd = active.root,
     paths = paths,
     title = active.changed_only and "Search changed files" or "Search all files",
-    preview = function(path)
-      local changed = active.changed_by_path[path]
-      if changed then
-        local parsed = git.diff(active.root, changed, config.options.context_lines, active.target)
-        return table.concat(vim.tbl_map(function(entry)
-          return entry.text
-        end, parsed.lines), "\n"), "diff"
-      end
-      return git.read_file(active.root, path, active.target), vim.filetype.match({ filename = path }) or ""
-    end,
+    preview = preview_path,
     on_select = function(path)
       if not active then
         return

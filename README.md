@@ -117,6 +117,8 @@ Archived comments never mix into the active review. In the history pane, press `
 
 Content-search results open in diff view when the selected file belongs to the current review diff, and in source view otherwise. `<localleader>v` switches a changed file between those same diff and source views.
 
+Comment search uses the same Snacks-style layout as file search: filename first, comment text beside it, and an exact diff/source preview for the current review target.
+
 ## Optional LazyVim integration
 
 No extra dependency is required. When [Snacks.nvim](https://github.com/folke/snacks.nvim) is available, all-files search in the working tree and working-tree text search use its native picker, including preview and the layout configured by LazyVim. `Alt-i` toggles ignored files, `Alt-h` toggles hidden files, and `Alt-m` maximizes the picker. Changed-only search, commit/range search, and selective `include_ignored` search keep the plugin's Git-aware fallback so their meaning stays exact.
@@ -169,7 +171,7 @@ The plugin does not modify project files unless you explicitly export to a path 
 
 ## WSL clipboard
 
-Copying always updates Neovim's unnamed register. Inside WezTerm, the plugin first uses OSC 52 to update the real system clipboard without starting another process. On other WSL terminals, it prefers `win32yank.exe`, then Windows PowerShell with UTF-8 input enabled. It avoids sending UTF-8 directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. Other supported providers include Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
+Copying always updates Neovim's unnamed register. On WSL, the plugin first converts text to UTF-16LE and sends it directly to `clip.exe`, avoiding both Japanese corruption and PowerShell startup time. It then falls back to OSC 52 in WezTerm, `win32yank.exe`, and UTF-8-enabled Windows PowerShell. Other supported providers include Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
 
 External clipboard commands run asynchronously, so copying through `<localleader>y` does not block the editor while WSL PowerShell or another provider starts.
 

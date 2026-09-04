@@ -19,6 +19,7 @@ end
 local picked_file
 local picked_position
 local picked_filtered_file
+local picked_comment
 local closed_picker = false
 _G.Snacks = {
   picker = {
@@ -73,12 +74,27 @@ assert(
   }),
   "Snacks filtered file picker was not used"
 )
+local picker_comment = { path = "tracked.txt", start_line = 1, body = "Review this line" }
+assert(
+  picker.comment_list({
+    cwd = root,
+    comments = { picker_comment },
+    preview = function()
+      return "preview", "diff"
+    end,
+    on_select = function(comment)
+      picked_comment = comment
+    end,
+  }),
+  "Snacks comment picker was not used"
+)
 vim.wait(100, function()
-  return picked_file ~= nil and picked_position ~= nil and picked_filtered_file ~= nil
+  return picked_file ~= nil and picked_position ~= nil and picked_filtered_file ~= nil and picked_comment ~= nil
 end)
 equal("src/plain.lua", picked_file, "Snacks file selection")
 equal({ "tracked.txt", { 3, 4 } }, picked_position, "Snacks grep selection")
 equal("tracked.txt", picked_filtered_file, "Snacks filtered file selection")
+equal(picker_comment, picked_comment, "Snacks comment selection")
 assert(closed_picker, "Snacks picker should close before selection")
 _G.Snacks = nil
 assert(not picker.available(), "missing Snacks picker should be detected")
@@ -93,12 +109,16 @@ assert(vim.iter(unborn_diff.lines):any(function(line)
 end), "unborn repository diff is missing new content")
 
 local wsl_providers = clipboard._command_providers(true)
-equal("win32yank.exe", wsl_providers[1].executable, "preferred WSL clipboard provider")
-equal("powershell.exe", wsl_providers[2].executable, "UTF-8 WSL clipboard fallback")
-assert(table.concat(wsl_providers[2].command, " "):find("UTF8Encoding", 1, true), "PowerShell input is not UTF-8")
-assert(not vim.iter(wsl_providers):any(function(provider)
-  return provider.executable == "clip.exe"
-end), "clip.exe must not receive UTF-8 text directly")
+equal("clip.exe", wsl_providers[1].executable, "preferred WSL clipboard provider")
+equal("utf-16le", wsl_providers[1].encoding, "clip.exe input encoding")
+local encoded_japanese = clipboard._provider_input(wsl_providers[1], "日本語")
+local encoded_bytes = encoded_japanese:gsub(".", function(byte)
+  return ("%02x"):format(byte:byte())
+end)
+equal("e5652c679e8a", encoded_bytes, "UTF-16LE clipboard input")
+equal("win32yank.exe", wsl_providers[2].executable, "WSL clipboard fallback")
+equal("powershell.exe", wsl_providers[3].executable, "UTF-8 WSL clipboard fallback")
+assert(table.concat(wsl_providers[3].command, " "):find("UTF8Encoding", 1, true), "PowerShell input is not UTF-8")
 
 equal(vim.uv.fs_realpath(root), vim.uv.fs_realpath(git.root(root)), "repository root")
 local repo_root = git.root(root)
