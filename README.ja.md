@@ -169,7 +169,7 @@ require("ai-review").setup({
 
 ## WSLのクリップボード
 
-コピー時は常にNeovimの無名レジスタへ書き込みます。WSLでは `win32yank.exe` を優先し、次にUTF-8入力を明示したWindows PowerShellを使います。日本語などが文字化けするため、UTF-8テキストを `clip.exe` へ直接送りません。そのほか、Neovimのクリップボードプロバイダ、`wl-copy`、`xclip`、macOSの `pbcopy` に対応しています。
+コピー時は常にNeovimの無名レジスタへ書き込みます。WezTerm内では、別プロセスを起動せず実際のシステムクリップボードを更新できるOSC 52を最優先します。それ以外のWSL端末では `win32yank.exe` を優先し、次にUTF-8入力を明示したWindows PowerShellを使います。日本語などが文字化けするため、UTF-8テキストを `clip.exe` へ直接送りません。そのほか、Neovimのクリップボードプロバイダ、`wl-copy`、`xclip`、macOSの `pbcopy` に対応しています。
 
 外部クリップボード処理は非同期で実行するため、WSLのPowerShellなどが起動する間も `<localleader>y` でエディタを停止させません。
 

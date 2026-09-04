@@ -169,7 +169,7 @@ The plugin does not modify project files unless you explicitly export to a path 
 
 ## WSL clipboard
 
-Copying always updates Neovim's unnamed register. On WSL, the plugin prefers `win32yank.exe`, then Windows PowerShell with UTF-8 input enabled. It avoids sending UTF-8 directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. Other supported providers include Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
+Copying always updates Neovim's unnamed register. Inside WezTerm, the plugin first uses OSC 52 to update the real system clipboard without starting another process. On other WSL terminals, it prefers `win32yank.exe`, then Windows PowerShell with UTF-8 input enabled. It avoids sending UTF-8 directly to `clip.exe`, which can corrupt Japanese and other non-ASCII text. Other supported providers include Neovim's clipboard provider, `wl-copy`, `xclip`, and macOS `pbcopy`.
 
 External clipboard commands run asynchronously, so copying through `<localleader>y` does not block the editor while WSL PowerShell or another provider starts.
 

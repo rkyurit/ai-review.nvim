@@ -51,8 +51,23 @@ local function command_providers(wsl)
   return providers
 end
 
+local function copy_with_osc52(text)
+  local wezterm = vim.env.WEZTERM_PANE or (vim.env.TERM_PROGRAM or ""):lower() == "wezterm"
+  if not wezterm or vim.env.TMUX then
+    return false
+  end
+  local ok, osc52 = pcall(require, "vim.ui.clipboard.osc52")
+  if not ok or type(osc52.copy) ~= "function" then
+    return false
+  end
+  return pcall(osc52.copy("+"), vim.split(text, "\n", { plain = true }))
+end
+
 function M.copy(text)
   vim.fn.setreg('"', text)
+  if copy_with_osc52(text) then
+    return true, "osc52"
+  end
   local wsl = is_wsl()
 
   -- WSL clipboard providers must be chosen explicitly. Neovim can otherwise
@@ -79,6 +94,10 @@ end
 function M.copy_async(text, callback)
   callback = callback or function() end
   vim.fn.setreg('"', text)
+  if copy_with_osc52(text) then
+    callback(true, "osc52")
+    return
+  end
   local wsl = is_wsl()
   local has_clipboard = vim.fn.has("clipboard") == 1
 
@@ -122,5 +141,6 @@ end
 
 M._is_wsl = is_wsl
 M._command_providers = command_providers
+M._copy_with_osc52 = copy_with_osc52
 
 return M
