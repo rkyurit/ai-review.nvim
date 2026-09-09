@@ -54,7 +54,11 @@ end
 
 local function provider_input(provider, text)
   if provider.encoding == "utf-16le" then
-    return vim.iconv(text, "utf-8", "utf-16le")
+    -- Windows clipboard consumers expect CF_UNICODETEXT-style CRLF line
+    -- endings. LF-only UTF-16 text can be rendered as overlapping or
+    -- progressively truncated lines by terminal-based paste targets.
+    local windows_text = text:gsub("\r?\n", "\r\n")
+    return vim.iconv(windows_text, "utf-8", "utf-16le")
   end
   return text
 end
@@ -72,7 +76,7 @@ local function copy_with_osc52(text)
 end
 
 function M.copy(text)
-  vim.fn.setreg('"', text)
+  vim.fn.setreg('"', text, "v")
   local wsl = is_wsl()
   if (not wsl or vim.fn.executable("clip.exe") ~= 1) and copy_with_osc52(text) then
     return true, "osc52"
@@ -101,7 +105,7 @@ end
 
 function M.copy_async(text, callback)
   callback = callback or function() end
-  vim.fn.setreg('"', text)
+  vim.fn.setreg('"', text, "v")
   local wsl = is_wsl()
   if (not wsl or vim.fn.executable("clip.exe") ~= 1) and copy_with_osc52(text) then
     callback(true, "osc52")
